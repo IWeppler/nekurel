@@ -1,6 +1,6 @@
 import { avoidOptions, normalize, type AvoidId, type Catalog, type Plant, type Preparation } from "./catalog.ts";
 
-const headers = ["Nombre", "Usos", "Sinónimos", "Hierbas", "Preparación", "Advertencias", "Notas", "No recomendado en", "Habilitado"];
+const headers = ["Nombre", "Usos", "Sinónimos", "Hierbas", "Preparación", "Advertencias", "Notas", "No recomendado en", "Habilitado", "Imagen"];
 const columnNames: Record<string, string> = {
   nombre: "name", tonico: "name", name: "name",
   usos: "uses", "se utiliza para": "uses",
@@ -11,6 +11,7 @@ const columnNames: Record<string, string> = {
   notas: "notes", "notas internas": "notes",
   "no recomendado en": "avoid", evitar: "avoid",
   habilitado: "published", publicado: "published", estado: "published",
+  imagen: "image",
 };
 
 /** Parses CSV text. The delimiter (comma or semicolon) is detected from the first line. */
@@ -50,7 +51,7 @@ export function exportTonics(catalog: Catalog): string {
     p.ingredients.map(i => `${herb(i.plantId)}:${i.amount}`).join("|"),
     p.instructions, p.warnings, p.notes,
     (p.avoid ?? []).map(id => avoidOptions.find(o => o.id === id)?.label ?? id).join("|"),
-    p.published ? "Sí" : "No",
+    p.published ? "Sí" : "No", p.image || "",
   ]);
   return "﻿" + [headers, ...rows].map(r => r.map(c => quote(c, ";")).join(";")).join("\r\n") + "\r\n";
 }
@@ -95,9 +96,12 @@ export function importTonics(catalog: Catalog, text: string): ImportReport {
     if (new Set(ingredients.map(i => i.plantId)).size !== ingredients.length) { report.errors.push(`Fila ${line} (${name}): repite una hierba.`); return; }
     plants.push(...created);
     const existing = preparations.find(p => normalize(p.name) === normalize(name));
+    const image = columns.includes("image") ? get("image") : existing?.image;
+    if (image && !/^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(image)) { report.errors.push(`Fila ${line} (${name}): la imagen no corresponde a un archivo del catálogo.`); return; }
     const item: Preparation = {
       id: existing?.id ?? crypto.randomUUID(), name, uses: list(get("uses"), true), aliases: list(get("aliases"), true), ingredients,
       instructions: get("instructions"), warnings: get("warnings"), notes: get("notes"), avoid: parseAvoid(get("avoid")), published: false,
+      ...(image !== undefined ? { image } : {}),
     };
     const complete = Boolean(item.instructions && item.uses.length && ingredients.every(i => i.amount));
     item.published = truthy(get("published")) && complete;

@@ -3,10 +3,10 @@ import { readCatalog, saveCatalog, ConflictError } from "@/lib/store";
 import { searchCatalog, validateCatalog } from "@/lib/catalog";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const catalog = await readCatalog();
-    if (await isAdmin()) return Response.json(catalog, { headers: { "Cache-Control": "no-store" } });
+    if (new URL(request.url).searchParams.get("scope") !== "public" && await isAdmin()) return Response.json(catalog, { headers: { "Cache-Control": "no-store" } });
     const visible = searchCatalog(catalog, "");
     return Response.json({ ...visible, revision: catalog.revision }, { headers: { "Cache-Control": "no-store", "X-Catalog-Scope": "public" } });
   } catch { return Response.json({ error: "No se pudo leer el catálogo. Revisá el archivo del servidor." }, { status: 500 }); }
@@ -25,3 +25,4 @@ export async function PUT(request: Request) {
     return Response.json({ error: "No se pudo guardar. Tus cambios siguen en el formulario; intentá nuevamente." }, { status: 500 });
   }
 }
+

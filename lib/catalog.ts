@@ -1,11 +1,13 @@
 export type Plant = {
   id: string; name: string; scientificName: string; properties: string;
   uses: string[]; aliases: string[]; warnings: string; notes: string; published: boolean;
+  image?: string;
 };
 export type Preparation = {
   id: string; name: string; uses: string[]; aliases: string[];
   ingredients: { plantId: string; amount: string }[];
   instructions: string; warnings: string; notes: string; published: boolean;
+  image?: string;
   /** Situations in which this tonic is not recommended (see avoidOptions). */
   avoid?: string[];
 };
@@ -37,7 +39,7 @@ export function searchCatalog(catalog: Catalog, query: string) {
   const rank = <T extends { name: string; uses: string[]; aliases: string[] }>(items: T[], extra: (item: T) => string[] = () => []) => items.map(item => ({ item, score: relevance(item, query, extra(item)) })).filter(result => result.score > 0).sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name, "es")).map(result => result.item);
   const preparations = rank(catalog.preparations.filter(p => p.published && p.ingredients.every(i => plants.some(plant => plant.id === i.plantId))), p => p.ingredients.map(i => herbName(i.plantId)));
   const relatedIds = new Set(preparations.flatMap(p => p.ingredients.map(i => i.plantId)));
-  const related = rank(plants);
+  const related = rank(plants, p => [p.scientificName, p.properties]);
   return { preparations, plants: [...related, ...plants.filter(p => relatedIds.has(p.id) && !related.some(match => match.id === p.id))] };
 }
 
@@ -50,11 +52,11 @@ export const seedCatalog: Catalog = {
   revision: 0,
   plants: [
     plant(1, "Manzanilla", "Matricaria chamomilla", "Digestiva y suave. De uso tradicional para calmar molestias del estómago.", ["gases", "digestión lenta", "cólicos leves"], ["té de manzanilla"], "Puede causar alergia en personas sensibles a la margarita, el crisantemo o el ajenjo."),
-    plant(2, "Menta", "Mentha piperita", "Aromática y refrescante. De uso tradicional para la digestión.", ["pesadez", "gases", "náuseas leves"], ["menta piperita"], "Evitar si hay reflujo gástrico. No dar a niños pequeños."),
+    plant(2, "Menta", "Mentha piperita", "Aromática y refrescante. De uso tradicional para la digestión.", ["pesadez", "gases", "náuseas leves", "mate"], ["menta piperita", "hierbas para mate"], "Evitar si hay reflujo gástrico. No dar a niños pequeños."),
     plant(3, "Hinojo", "Foeniculum vulgare", "Carminativo. De uso tradicional para aliviar gases.", ["gases", "digestión lenta", "cólicos leves"], ["hinojo dulce"], "Evitar en embarazo. Puede causar alergia en personas sensibles al apio o la zanahoria."),
     plant(4, "Boldo", "Peumus boldus", "Amargo. De uso tradicional para las comidas abundantes y el hígado.", ["comidas pesadas", "digestión lenta", "hígado cargado"], ["boldo chileno"], "No usar en embarazo, lactancia ni con problemas de vesícula o vías biliares. No usar de forma prolongada."),
-    plant(5, "Cedrón", "Aloysia citrodora", "Aromática y digestiva. De uso tradicional después de las comidas.", ["digestión lenta", "nervios", "gases"], ["hierba luisa"], "Evitar en embarazo por falta de información suficiente."),
-    plant(6, "Burrito", "Aloysia polystachya", "Aromática y digestiva. Muy usada en infusiones de sobremesa.", ["digestión lenta", "pesadez", "gases"], ["poleo", "peperina de burro"], "Evitar en embarazo y lactancia por falta de información suficiente."),
+    plant(5, "Cedrón", "Aloysia citrodora", "Aromática y digestiva. De uso tradicional después de las comidas.", ["digestión lenta", "nervios", "gases", "mate"], ["hierba luisa", "hierbas para mate"], "Evitar en embarazo por falta de información suficiente."),
+    plant(6, "Burrito", "Aloysia polystachya", "Aromática y digestiva. Muy usada en infusiones de sobremesa.", ["digestión lenta", "pesadez", "gases", "mate"], ["poleo", "peperina de burro", "hierbas para mate"], "Evitar en embarazo y lactancia por falta de información suficiente."),
     plant(7, "Valeriana", "Valeriana officinalis", "Relajante. De uso tradicional para conciliar el sueño.", ["insomnio", "nerviosismo", "dificultad para dormir"], ["raíz de valeriana"], "Puede dar somnolencia: no manejar luego de tomarla. No combinar con sedantes ni alcohol."),
     plant(8, "Pasiflora", "Passiflora incarnata", "Calmante. De uso tradicional para la inquietud nocturna.", ["insomnio", "ansiedad", "nerviosismo"], ["pasionaria", "flor de la pasión"], "Puede dar somnolencia. Evitar en embarazo y con sedantes."),
     plant(9, "Tilo", "Tilia cordata", "Suave y relajante. De uso tradicional en infusiones de la noche.", ["insomnio", "nervios", "resfrío"], ["flor de tilo"], "Consultar si hay problemas cardíacos."),
@@ -93,6 +95,7 @@ export function validateCatalog(value: unknown): asserts value is Catalog {
   for (const item of [...data.plants, ...data.preparations]) {
     if (!item || typeof item !== "object") fail("Ficha inválida.");
     string(item.id, true); string(item.name, true); string(item.warnings); string(item.notes); tags(item.uses); tags(item.aliases);
+    if (item.image !== undefined && (typeof item.image !== "string" || (item.image !== "" && !/^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(item.image)))) fail("Imagen inválida. Subí una imagen desde el editor.");
     if (typeof item.published !== "boolean" || ids.has(item.id)) fail("Ficha inválida o identificador duplicado.");
     ids.add(item.id);
   }

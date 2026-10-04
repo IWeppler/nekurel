@@ -1,5 +1,5 @@
 /* Offline support: the app shell and the public catalog are cached so the screen keeps working without wifi. */
-const VERSION = "v1";
+const VERSION = "v6";
 const SHELL = `nekurel-shell-${VERSION}`;
 const DATA = `nekurel-data-${VERSION}`;
 
@@ -37,11 +37,15 @@ self.addEventListener("fetch", event => {
   if (url.pathname === "/api/catalog") {
     /* Only the staff version is cached, never the administrator one (it includes drafts). */
     event.respondWith(networkFirst(request, DATA, response => response.headers.get("X-Catalog-Scope") === "public"));
+  } else if (url.pathname.startsWith("/api/images/")) {
+    event.respondWith(networkFirst(request, DATA));
   } else if (url.pathname.startsWith("/api/")) {
     return;
   } else if (request.mode === "navigate") {
     event.respondWith(networkFirst(request, SHELL));
-  } else if (url.pathname.startsWith("/_next/static/") || url.pathname === "/pwa-icon") {
+  } else if (url.pathname.startsWith("/_next/static/") || url.pathname === "/pwa-icon" || url.pathname === "/botanical-categories.png") {
     event.respondWith(staleWhileRevalidate(request));
   }
 });
+
+

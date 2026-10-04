@@ -64,3 +64,19 @@ node --experimental-strip-types --test tests/catalog.test.mjs
 ```
 
 Las pruebas cubren sinónimos, normalización, coincidencias falsas, visibilidad de borradores y validación de combinaciones.
+
+## Imágenes, hierbas independientes y WhatsApp
+
+- Desde **Tónicos > Editar** o **Hierbas > Editar hierba**, subir una foto JPG, PNG o WebP (hasta 5 MB). Guardar la ficha para asociarla. Se puede cambiar o quitar la foto sin afectar la receta. Los archivos se guardan en `data/images/` (o en `ANKORA_DATA_DIR/images/`); respaldar esa carpeta junto con el catálogo. Las fotos son accesibles a quienes tienen acceso al servidor. Quitar una foto de una ficha no elimina el archivo, para conservar otras referencias.
+- **Hierbas > Nueva hierba** permite crear fichas independientes de un tónico. Cargar usos y formas de uso (`mate`, `infusión`, etc.), propiedades, nombre científico y sinónimos. El buscador muestra tónicos y hierbas en dos grupos. Los ejemplos iniciales de Menta, Cedrón y Burrito incluyen `mate`; un catálogo ya guardado conserva sus etiquetas y se puede actualizar desde el panel.
+- En el detalle de un tónico, seleccionar las hierbas que se van a incluir. El cálculo de gramos usa únicamente esa selección. Si se omiten ingredientes, completar las indicaciones de preparación para esa selección; no se cambia la receta original del dueño ni se transfieren automáticamente sus usos a la mezcla modificada.
+- **Compartir por WhatsApp** pide un número con código de país, permite revisar el mensaje y abre `wa.me` con el texto precargado. El vendedor confirma el envío en WhatsApp. No se guarda el número ni se envían mensajes automáticamente. El mensaje incluye ingredientes, cantidades y advertencias; excluye notas internas. También se puede compartir la ficha de una hierba individual. Las imágenes se muestran en la aplicación; WhatsApp comparte texto, sin adjuntar las fotos.
+- La columna opcional **Imagen** del CSV conserva referencias a fotos del mismo servidor. Importar un CSV antiguo sin esa columna mantiene la foto existente. El CSV no contiene los archivos de imagen.
+
+## Entrada por rol y vista del vendedor
+
+Al abrir la aplicación se elige **Vendedor** o **Administrador**. El vendedor entra sin contraseña al catálogo público; el administrador usa la sesión protegida existente y entra a Tónicos. La barra superior flotante se eliminó. El vendedor regresa a la selección con la X junto al buscador; el administrador usa Cambiar rol (cierra su sesión). Al recargar se vuelve a elegir el rol.
+
+La vista del vendedor sigue la referencia móvil: fondo gris, búsqueda grande, categorías fotográficas (Mate, Hierbas, Tónicos), accesos rápidos y catálogo en filas. Hay filtros Todo/Tónicos/Hierbas y las situaciones del cliente se expanden al necesitarlas. Las fotos cargadas se muestran en las filas; si falta una foto se usa un icono. La foto decorativa de categorías está en `public/botanical-categories.png`, generada con la herramienta integrada de ImageGen. Las fotos del catálogo tienen prioridad cuando están disponibles. Las fichas, cantidades y WhatsApp conservan sus funciones.
+
+La consulta `GET /api/catalog?scope=public` devuelve únicamente el catálogo público incluso si el navegador conserva una sesión de administrador. La selección visual de un rol no reemplaza la autorización del servidor.
