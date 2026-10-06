@@ -33,7 +33,8 @@ export function herbText(plant: Plant) {
 export function whatsappUrl(number: string, text: string) {
   const raw = number.trim();
   if (!/^\+?[\d\s().-]+$/.test(raw)) throw new Error("Ingresá un número válido con código de país.");
-  const digits = raw.replace(/\D/g, "");
+  const entered = raw.replace(/\D/g, "");
+  const digits = !raw.startsWith("+") && entered.startsWith("3491") ? `549${entered}` : entered;
   if (!/^[1-9]\d{7,14}$/.test(digits)) throw new Error("Ingresá el número completo con código de país, sin el 0 inicial.");
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }

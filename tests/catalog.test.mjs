@@ -42,7 +42,7 @@ test('impide referencias rotas, plantas repetidas y preparación incompleta', ()
   const duplicate = activeCatalog(); duplicate.preparations[0].ingredients.push(duplicate.preparations[0].ingredients[0]);
   assert.throws(() => validateCatalog(duplicate), /repetidas/);
   const incomplete = activeCatalog(); incomplete.preparations[0].instructions = '';
-  assert.throws(() => validateCatalog(incomplete), /completá/);
+  assert.throws(() => validateCatalog(incomplete), /completá/i);
 });
 test('buscar por el nombre de una hierba encuentra los tónicos que la llevan', () => {
   const names = searchCatalog(seedCatalog, 'manzanilla').preparations.map(p => p.name);
@@ -51,7 +51,7 @@ test('buscar por el nombre de una hierba encuentra los tónicos que la llevan', 
 });
 test('los tónicos iniciales indican en qué situaciones no se recomiendan', () => {
   assert.ok(seedCatalog.preparations.every(p => p.avoid?.length));
-  const invalid = structuredClone(seedCatalog); invalid.preparations[0].avoid = ['otra cosa'];
+  const invalid = structuredClone(seedCatalog); invalid.preparations[0].avoid = ['otra cosa', 'otra cosa'];
   assert.throws(() => validateCatalog(invalid), /no recomendado/);
 });
 test('exportar e importar el catálogo conserva los tónicos', () => {
@@ -72,3 +72,4 @@ test('importar crea tónicos y hierbas nuevas, y deja en borrador los incompleto
   assert.ok(report.catalog.plants.some(p => p.name === 'Salvia'));
   validateCatalog(report.catalog);
 });
+

@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const catalog = await readCatalog();
     if (new URL(request.url).searchParams.get("scope") !== "public" && await isAdmin()) return Response.json(catalog, { headers: { "Cache-Control": "no-store" } });
     const visible = searchCatalog(catalog, "");
-    return Response.json({ ...visible, revision: catalog.revision }, { headers: { "Cache-Control": "no-store", "X-Catalog-Scope": "public" } });
+    return Response.json({ ...visible, revision: catalog.revision, categoryImages: catalog.categoryImages, categories: catalog.categories }, { headers: { "Cache-Control": "no-store", "X-Catalog-Scope": "public" } });
   } catch { return Response.json({ error: "No se pudo leer el catálogo. Revisá el archivo del servidor." }, { status: 500 }); }
 }
 export async function PUT(request: Request) {

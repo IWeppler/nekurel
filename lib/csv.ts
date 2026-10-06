@@ -1,4 +1,4 @@
-import { avoidOptions, normalize, type AvoidId, type Catalog, type Plant, type Preparation } from "./catalog.ts";
+import { avoidOptions, normalize, type Catalog, type Plant, type Preparation } from "./catalog.ts";
 
 const headers = ["Nombre", "Usos", "Sinónimos", "Hierbas", "Preparación", "Advertencias", "Notas", "No recomendado en", "Habilitado", "Imagen"];
 const columnNames: Record<string, string> = {
@@ -57,13 +57,15 @@ export function exportTonics(catalog: Catalog): string {
 }
 
 const list = (value: string, commas: boolean) => [...new Set(value.split(commas ? /[|;,\n]/ : /[|;\n]/).map(t => t.trim()).filter(Boolean))];
-const parseAvoid = (value: string): AvoidId[] => {
-  const found = new Set<AvoidId>();
-  for (const token of list(value, true).map(normalize)) {
+const parseAvoid = (value: string): string[] => {
+  const found = new Set<string>();
+  for (const label of list(value, true)) {
+    const token = normalize(label);
     if (token.includes("embaraz")) found.add("embarazo");
     else if (token.includes("lactan")) found.add("lactancia");
     else if (/nin|infan|bebe/.test(token)) found.add("ninos");
     else if (token.includes("medic")) found.add("medicacion");
+    else found.add(label);
   }
   return [...found];
 };
@@ -99,7 +101,7 @@ export function importTonics(catalog: Catalog, text: string): ImportReport {
     const image = columns.includes("image") ? get("image") : existing?.image;
     if (image && !/^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(image)) { report.errors.push(`Fila ${line} (${name}): la imagen no corresponde a un archivo del catálogo.`); return; }
     const item: Preparation = {
-      id: existing?.id ?? crypto.randomUUID(), name, uses: list(get("uses"), true), aliases: list(get("aliases"), true), ingredients,
+      id: existing?.id ?? crypto.randomUUID(), categoryIds: existing?.categoryIds, name, uses: list(get("uses"), true), aliases: list(get("aliases"), true), ingredients,
       instructions: get("instructions"), warnings: get("warnings"), notes: get("notes"), avoid: parseAvoid(get("avoid")), published: false,
       ...(image !== undefined ? { image } : {}),
     };
@@ -111,3 +113,5 @@ export function importTonics(catalog: Catalog, text: string): ImportReport {
   report.catalog = { ...catalog, plants, preparations };
   return report;
 }
+
+

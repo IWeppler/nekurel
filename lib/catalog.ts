@@ -2,16 +2,31 @@ export type Plant = {
   id: string; name: string; scientificName: string; properties: string;
   uses: string[]; aliases: string[]; warnings: string; notes: string; published: boolean;
   image?: string;
+  categoryIds?: string[];
 };
 export type Preparation = {
   id: string; name: string; uses: string[]; aliases: string[];
   ingredients: { plantId: string; amount: string }[];
   instructions: string; warnings: string; notes: string; published: boolean;
   image?: string;
+  categoryIds?: string[];
   /** Situations in which this tonic is not recommended (see avoidOptions). */
   avoid?: string[];
 };
-export type Catalog = { plants: Plant[]; preparations: Preparation[]; revision: number };
+export const categoryOptions = [
+  { id: "mate", label: "Mate", query: "mate", kind: "herbs", position: "0%" },
+  { id: "herbs", label: "Hierbas", query: "", kind: "herbs", position: "100%" },
+  { id: "tonics", label: "Tónicos", query: "", kind: "tonics", position: "50%" },
+] as const;
+export type Category = { id: string; label: string };
+export type CategoryImages = Record<string, string>;
+export const getCategories = (catalog: Catalog | null): Category[] => catalog?.categories ?? categoryOptions.map(({ id, label }) => ({ id, label }));
+export function itemCategories(item: Plant | Preparation): string[] {
+  if (item.categoryIds !== undefined) return item.categoryIds;
+  if ("ingredients" in item) return ["tonics"];
+  return ["herbs", ...([...item.uses, ...item.aliases].some(term => normalize(term).includes("mate")) ? ["mate"] : [])];
+}
+export type Catalog = { plants: Plant[]; preparations: Preparation[]; revision: number; categoryImages?: CategoryImages; categories?: Category[] };
 
 export const avoidOptions = [
   { id: "embarazo", label: "Embarazo" },
@@ -19,6 +34,13 @@ export const avoidOptions = [
   { id: "ninos", label: "Niños pequeños" },
   { id: "medicacion", label: "Toma medicación" },
 ] as const;
+export function getAvoidOptions(catalog: Catalog | null): { id: string; label: string }[] {
+  const options: { id: string; label: string }[] = [...avoidOptions];
+  for (const prep of catalog?.preparations ?? []) for (const id of prep.avoid ?? []) {
+    if (!options.some(option => normalize(option.id) === normalize(id))) options.push({ id, label: id });
+  }
+  return options;
+}
 export type AvoidId = (typeof avoidOptions)[number]["id"];
 
 export const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -88,6 +110,21 @@ export function validateCatalog(value: unknown): asserts value is Catalog {
   if (!value || typeof value !== "object") fail("Catálogo inválido.");
   const data = value as Catalog;
   if (!Array.isArray(data.plants) || !Array.isArray(data.preparations) || !Number.isSafeInteger(data.revision) || data.revision < 0) fail("Catálogo inválido.");
+  if (data.categories !== undefined) {
+    if (!Array.isArray(data.categories) || !data.categories.length || data.categories.length > 50) fail("Categorías inválidas.");
+    const categoryIds = new Set<string>(); const names = new Set<string>();
+    for (const category of data.categories) {
+      if (!category || typeof category.id !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(category.id) || typeof category.label !== "string" || !category.label.trim() || category.label.length > 100 || categoryIds.has(category.id) || names.has(normalize(category.label))) fail("Revisá las categorías: cada una debe tener un nombre distinto.");
+      categoryIds.add(category.id); names.add(normalize(category.label));
+    }
+  }
+  const categoryIds = new Set(getCategories(data).map(category => category.id));
+  if (data.categoryImages !== undefined) {
+    if (!data.categoryImages || typeof data.categoryImages !== "object" || Array.isArray(data.categoryImages)) fail("Imágenes de categorías inválidas.");
+    for (const [id, image] of Object.entries(data.categoryImages)) {
+      if (!categoryIds.has(id) || typeof image !== "string" || (image !== "" && !/^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(image))) fail("Imagen de categoría inválida. Subí una imagen desde el administrador.");
+    }
+  }
   if (data.plants.length > 2000 || data.preparations.length > 2000) fail("El catálogo supera el límite de este MVP.");
   const string = (v: unknown, required = false) => { if (typeof v !== "string" || v.length > 10000 || (required && !v.trim())) fail("Revisá los campos obligatorios."); };
   const tags = (v: unknown) => { if (!Array.isArray(v) || v.length > 100) fail("Etiquetas inválidas."); for (const tag of v as unknown[]) string(tag, true); };
@@ -97,18 +134,19 @@ export function validateCatalog(value: unknown): asserts value is Catalog {
     string(item.id, true); string(item.name, true); string(item.warnings); string(item.notes); tags(item.uses); tags(item.aliases);
     if (item.image !== undefined && (typeof item.image !== "string" || (item.image !== "" && !/^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(item.image)))) fail("Imagen inválida. Subí una imagen desde el editor.");
     if (typeof item.published !== "boolean" || ids.has(item.id)) fail("Ficha inválida o identificador duplicado.");
+    if (item.categoryIds !== undefined && (!Array.isArray(item.categoryIds) || item.categoryIds.length > 50 || item.categoryIds.some(id => typeof id !== "string" || !categoryIds.has(id)) || new Set(item.categoryIds).size !== item.categoryIds.length)) fail("Categorías de la ficha inválidas.");
     ids.add(item.id);
   }
   for (const plant of data.plants) { string(plant.scientificName); string(plant.properties); }
   for (const prep of data.preparations) {
     string(prep.instructions);
-    if (prep.avoid !== undefined && (!Array.isArray(prep.avoid) || prep.avoid.some(a => !avoidOptions.some(option => option.id === a)))) fail("Datos de no recomendado inválidos.");
+    if (prep.avoid !== undefined) { tags(prep.avoid); if (prep.avoid.some(a => a.length > 200) || new Set(prep.avoid.map(normalize)).size !== prep.avoid.length) fail("Datos de no recomendado inválidos."); }
     if (!Array.isArray(prep.ingredients) || !prep.ingredients.length || prep.ingredients.length > 100) fail("Elegí al menos una planta.");
     const seen = new Set<string>();
     for (const ingredient of prep.ingredients) {
       if (!ingredient || !data.plants.some(p => p.id === ingredient.plantId) || seen.has(ingredient.plantId)) fail("El preparado contiene plantas inválidas o repetidas.");
       seen.add(ingredient.plantId); string(ingredient.amount);
     }
-    if (prep.published && (!prep.instructions.trim() || !prep.uses.length || prep.ingredients.some(i => !i.amount.trim()))) fail("Para habilitar un tónico, completá usos, preparación y proporciones.");
+    if (prep.published && (!prep.instructions.trim() || !prep.uses.length || prep.ingredients.some(i => !i.amount.trim()))) fail("Completá usos, preparación y proporciones del tónico.");
   }
 }

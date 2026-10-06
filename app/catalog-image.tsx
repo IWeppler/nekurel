@@ -10,7 +10,7 @@ export function CatalogImage({ image, name, className = "" }: { image?: string; 
   return <Image className={`catalog-image ${className}`} src={image} alt={name} width={720} height={480} unoptimized onError={() => setFailed(image)} />;
 }
 
-export function ImageField({ value, onChange, onBusy }: { value?: string; onChange: (value: string) => void; onBusy: (busy: boolean) => void }) {
+export function ImageField({ value, onChange, onBusy, label = "Imagen de la ficha" }: { value?: string; label?: string; onChange: (value: string) => void; onBusy: (busy: boolean) => void }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -29,8 +29,9 @@ export function ImageField({ value, onChange, onBusy }: { value?: string; onChan
     } catch (e) { setError((e as Error).message); }
     finally { setUploading(false); onBusy(false); }
   };
-  return <fieldset className="image-field"><legend><ImageSquare size={20} aria-hidden="true" />Imagen de la ficha</legend>
+  return <fieldset className="image-field"><legend><ImageSquare size={20} aria-hidden="true" />{label}</legend>
     {value && <CatalogImage image={value} name="Vista previa de la imagen" className="image-preview" />}
     <div className="toolbar-actions"><label className="button"><UploadSimple size={20} aria-hidden="true" />{uploading ? "Subiendo…" : value ? "Cambiar imagen" : "Subir imagen"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} hidden onChange={e => void upload(e)} /></label>{value && <button type="button" className="button" disabled={uploading} onClick={() => onChange("")}><X size={20} aria-hidden="true" />Quitar</button>}</div><small>JPG, PNG o WebP, hasta 5 MB. La imagen queda asociada al guardar la ficha.</small>{error && <div className="alert error" role="alert">{error}</div>}
   </fieldset>;
 }
+
