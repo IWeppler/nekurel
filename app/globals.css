@@ -2463,3 +2463,5 @@ main {
 .category-empty { background: linear-gradient(145deg, #a3b293, #3b583c); }
 .category-empty-label { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 18px; }
 .category-editor .autosave-fields > .button { margin-top: 24px; }
+
+.entry-brand img { display: block; width: min(240px, 65vw); height: auto; }

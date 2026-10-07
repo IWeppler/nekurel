@@ -1,5 +1,5 @@
 /* Offline support: the app shell and the public catalog are cached so the screen keeps working without wifi. */
-const VERSION = "v17";
+const VERSION = "v18";
 const SHELL = `nekurel-shell-${VERSION}`;
 const DATA = `nekurel-data-${VERSION}`;
 
@@ -43,7 +43,7 @@ self.addEventListener("fetch", event => {
     return;
   } else if (request.mode === "navigate") {
     event.respondWith(networkFirst(request, SHELL));
-  } else if (url.pathname.startsWith("/_next/static/") || url.pathname === "/pwa-icon" || url.pathname === "/botanical-categories.png" || url.pathname === "/mate-ilustracion.png" || url.pathname === "/tonicos-ilustracion.png" || url.pathname === "/hierbas-ilustracion.png" || url.pathname === "/ingreso-botanico.png") {
+  } else if (url.pathname.startsWith("/_next/static/") || url.pathname === "/pwa-icon" || url.pathname === "/botanical-categories.png" || url.pathname === "/mate-ilustracion.png" || url.pathname === "/tonicos-ilustracion.png" || url.pathname === "/hierbas-ilustracion.png" || url.pathname === "/ingreso-botanico.png" || url.pathname === "/nekurel-logo.png") {
     event.respondWith(staleWhileRevalidate(request));
   }
 });

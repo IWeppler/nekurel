@@ -21,6 +21,7 @@ import {
   WifiSlash,
   X,
 } from "@phosphor-icons/react";
+import Image from "next/image";
 import { TonicDetail, HerbDetail } from "./finder";
 import { Finder } from "./seller-finder";
 import { ImageField } from "./catalog-image";
@@ -723,8 +724,7 @@ export default function Home() {
       {!role && (
         <div className="role-entry" inert={screenOpen}>
           <div className="entry-brand">
-            <Leaf size={26} weight="fill" aria-hidden="true" />
-            <span>Ñekurel</span>
+            <Image src="/nekurel-logo.png" alt="Ñekurel Herboristería — Tostado, Santa Fe" width={1600} height={1280} preload unoptimized />
           </div>
           <div className="entry-content">
             <h1>¿Cómo querés entrar?</h1>
