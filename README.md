@@ -80,3 +80,9 @@ Al abrir la aplicación se elige **Vendedor** o **Administrador**. El vendedor e
 La vista del vendedor sigue la referencia móvil: fondo gris, búsqueda grande, categorías fotográficas (Mate, Hierbas, Tónicos), accesos rápidos y catálogo en filas. Hay filtros Todo/Tónicos/Hierbas y las situaciones del cliente se expanden al necesitarlas. Las fotos cargadas se muestran en las filas; si falta una foto se usa un icono. La foto decorativa de categorías está en `public/botanical-categories.png`, generada con la herramienta integrada de ImageGen. Las fotos del catálogo tienen prioridad cuando están disponibles. Las fichas, cantidades y WhatsApp conservan sus funciones.
 
 La consulta `GET /api/catalog?scope=public` devuelve únicamente el catálogo público incluso si el navegador conserva una sesión de administrador. La selección visual de un rol no reemplaza la autorización del servidor.
+
+## Vista previa al compartir (Open Graph)
+
+La portada social se genera en `app/opengraph-image.tsx` a 1200 × 630 px con la identidad botánica de Ñekurel. El título, la descripción y las etiquetas de Open Graph y Twitter están en `app/layout.tsx`.
+
+La URL pública predeterminada es `https://nekurel.vercel.app`. Si cambia el dominio, definir `NEXT_PUBLIC_SITE_URL` con la URL completa y volver a compilar. La imagen se genera durante el build. Para que aparezca al compartir la web pública, desplegar estos cambios.
