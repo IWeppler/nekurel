@@ -49,6 +49,14 @@ En esta instalación se creó una contraseña local inicial: `hola123`. Cambiarl
 
 La contraseña se valida en el servidor. La sesión dura 8 horas y usa una cookie HttpOnly, SameSite=Strict y firma HMAC. Las escrituras requieren sesión de administrador y el mismo origen. El acceso tiene un límite global local de 10 intentos fallidos por 15 minutos.
 
+## Supabase (producción)
+
+Vercel no permite escribir archivos, así que en producción el catálogo, el uso y las fotos se guardan en Supabase. Con `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SECRET_KEY` definidas, la app usa Supabase; sin ellas, usa la carpeta `data/`.
+
+1. Ejecutar `supabase/schema.sql` en el SQL Editor de Supabase (crea la tabla `app_data`, las funciones y el bucket privado `images`).
+2. Definir `SUPABASE_SECRET_KEY` en Vercel y en `.env.local`. Nunca con prefijo `NEXT_PUBLIC_`.
+3. Opcional: copiar los datos locales con `node --env-file=.env.local scripts/upload-data.mjs`. Reemplaza el catálogo y el uso guardados en Supabase.
+
 ## Persistencia y alcance
 
 El catálogo se guarda al primer cambio en `data/catalog.json`, fuera de Git. Todos los dispositivos consultan ese mismo archivo. La interfaz actualiza el catálogo cada 30 segundos y al recuperar foco. Hay guardado mediante reemplazo atómico, cola de escrituras y control de versión: si dos administradores editan a la vez, el segundo debe actualizar antes de guardar.

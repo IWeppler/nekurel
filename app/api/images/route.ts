@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { isAdmin, sameOrigin } from "@/lib/auth";
 import { directory } from "@/lib/store";
 import { imageFormat, imageTypes, maxImageBytes } from "@/lib/images";
+import { supabase, supabaseEnabled } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -16,9 +17,12 @@ export async function POST(request: Request) {
     const format = imageFormat(bytes);
     if (!format || file.type !== imageTypes[format]) return Response.json({ error: "La imagen debe ser JPG, PNG o WebP." }, { status: 400 });
     const name = `${randomUUID()}.${format}`;
-    const folder = path.join(directory, "images");
-    await mkdir(folder, { recursive: true });
-    await writeFile(path.join(folder, name), bytes, { flag: "wx" });
+    if (supabaseEnabled) await supabase(`/storage/v1/object/images/${name}`, { method: "POST", headers: { "Content-Type": imageTypes[format] }, body: bytes });
+    else {
+      const folder = path.join(directory, "images");
+      await mkdir(folder, { recursive: true });
+      await writeFile(path.join(folder, name), bytes, { flag: "wx" });
+    }
     return Response.json({ image: `/api/images/${name}` }, { status: 201 });
   } catch (error) {
     const filesystemError = error instanceof Error && "code" in error;
