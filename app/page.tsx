@@ -45,7 +45,21 @@ import { importTonics, type ImportReport } from "@/lib/csv";
 
 type Tab = "search" | "tonics" | "herbs";
 type Draft = { name: string; amount: string };
-const proportions = ["0.5 partes", "1 parte", "1.5 partes", "2 partes", "2.5 partes", "3 partes", "4 partes", "5 partes", "6 partes", "7 partes", "8 partes", "9 partes", "10 partes"];
+const proportions = [
+  "0.5 partes",
+  "1 parte",
+  "1.5 partes",
+  "2 partes",
+  "2.5 partes",
+  "3 partes",
+  "4 partes",
+  "5 partes",
+  "6 partes",
+  "7 partes",
+  "8 partes",
+  "9 partes",
+  "10 partes",
+];
 const labels = { tonics: "Tónicos", herbs: "Hierbas" };
 const splitTags = (text: string) => [
   ...new Set(
@@ -81,18 +95,37 @@ const newHerb = (name: string): Plant => ({
 
 const parsePrice = (value: string) => {
   const number = Number(value.replace(",", "."));
-  return value.trim() && Number.isFinite(number) && number >= 0 ? number : undefined;
+  return value.trim() && Number.isFinite(number) && number >= 0
+    ? number
+    : undefined;
 };
-function PriceFields({ item }: { item: { price?: number; priceUnit?: string } }) {
+function PriceFields({
+  item,
+}: {
+  item: { price?: number; priceUnit?: string };
+}) {
   return (
     <div className="form-grid">
       <label className="field">
         <span>Precio de venta ($)</span>
-        <input name="price" type="number" inputMode="decimal" min={0} step="any" defaultValue={item.price ?? ""} placeholder="Ej: 2500" />
+        <input
+          name="price"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="any"
+          defaultValue={item.price ?? ""}
+          placeholder="Ej: 2500"
+        />
       </label>
       <label className="field">
         <span>El precio es por</span>
-        <input name="priceUnit" defaultValue={item.priceUnit ?? ""} maxLength={50} placeholder="Ej: 100 g, bolsita" />
+        <input
+          name="priceUnit"
+          defaultValue={item.priceUnit ?? ""}
+          maxLength={50}
+          placeholder="Ej: 100 g, bolsita"
+        />
         <small>Opcional. Sin precio, la ficha no muestra ninguno.</small>
       </label>
     </div>
@@ -227,7 +260,15 @@ export default function Home() {
   }, []);
   useEffect(() => {
     const refresh = () => {
-      if (!editor && !herbEditor && !categoryEditor && !deleting && !login && !busy && !report)
+      if (
+        !editor &&
+        !herbEditor &&
+        !categoryEditor &&
+        !deleting &&
+        !login &&
+        !busy &&
+        !report
+      )
         void load();
     };
     window.addEventListener("focus", refresh);
@@ -545,7 +586,12 @@ export default function Home() {
           />
         </div>
         <fieldset className="ingredients-editor">
-          <legend>Hierbas y proporciones <span className="required-tag">Obligatorio: al menos una hierba</span></legend>
+          <legend>
+            Hierbas y proporciones{" "}
+            <span className="required-tag">
+              Obligatorio: al menos una hierba
+            </span>
+          </legend>
           <p>
             Escribí el nombre y elegí una hierba existente. Si no está, se
             agrega sola. Con proporciones como &quot;2 partes&quot; el empleado
@@ -566,10 +612,20 @@ export default function Home() {
                   )
                 }
               />
-              <select aria-label={`Proporción ${index + 1}`} value={draft.amount} onChange={e => setDraft(index, { amount: e.target.value })}>
+              <select
+                aria-label={`Proporción ${index + 1}`}
+                value={draft.amount}
+                onChange={(e) => setDraft(index, { amount: e.target.value })}
+              >
                 <option value="">Elegir partes</option>
-                {draft.amount && !proportions.includes(draft.amount) && <option value={draft.amount}>{draft.amount}</option>}
-                {proportions.map(amount => <option key={amount} value={amount}>{amount}</option>)}
+                {draft.amount && !proportions.includes(draft.amount) && (
+                  <option value={draft.amount}>{draft.amount}</option>
+                )}
+                {proportions.map((amount) => (
+                  <option key={amount} value={amount}>
+                    {amount}
+                  </option>
+                ))}
               </select>
               <button
                 type="button"
@@ -603,7 +659,11 @@ export default function Home() {
           value={editor.warnings}
           multiline
         />
-        <AvoidSelector value={avoid} options={getAvoidOptions(catalog)} onChange={setAvoid} />
+        <AvoidSelector
+          value={avoid}
+          options={getAvoidOptions(catalog)}
+          onChange={setAvoid}
+        />
         {formError && (
           <div className="alert error" role="alert">
             {formError}
@@ -752,7 +812,14 @@ export default function Home() {
       {!role && (
         <div className="role-entry" inert={screenOpen}>
           <div className="entry-brand">
-            <Image src="/nekurel-logo.png" alt="Ñekurel Herboristería — Tostado, Santa Fe" width={1600} height={1280} preload unoptimized />
+            <Image
+              src="/nekurel-logo.png"
+              alt="Ñekurel Herboristería — Tostado, Santa Fe"
+              width={1600}
+              height={1280}
+              preload
+              unoptimized
+            />
           </div>
           <div className="entry-content">
             <h1>¿Cómo querés entrar?</h1>
@@ -813,9 +880,6 @@ export default function Home() {
               </div>
             )}
           </div>
-          <p className="entry-footer">
-            Herboristería · Conocimiento compartido
-          </p>
         </div>
       )}
       {role && (
@@ -830,7 +894,18 @@ export default function Home() {
                   <ArrowLeft size={18} aria-hidden="true" />
                   Cambiar rol
                 </button>
-                <button className="category-manage-button" disabled={busy} onClick={async () => { if (!(await flushEditor.current())) return; setFormError(""); setCategoryEditor(true); }}><Leaf size={21} aria-hidden="true" />Gestionar categorías</button>
+                <button
+                  className="category-manage-button"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (!(await flushEditor.current())) return;
+                    setFormError("");
+                    setCategoryEditor(true);
+                  }}
+                >
+                  <Leaf size={21} aria-hidden="true" />
+                  Gestionar categorías
+                </button>
               </div>
             )}
             {admin && (
@@ -1259,7 +1334,21 @@ export default function Home() {
           </div>
         </Screen>
       )}
-      {categoryEditor && admin && catalog && <CategoryImageEditor initial={catalog.categoryImages ?? {}} initialCategories={getCategories(catalog)} error={formError} onClose={() => setCategoryEditor(false)} onSave={(categories, images) => save({ ...(catalogRef.current ?? catalog), categories, categoryImages: images })} />}
+      {categoryEditor && admin && catalog && (
+        <CategoryImageEditor
+          initial={catalog.categoryImages ?? {}}
+          initialCategories={getCategories(catalog)}
+          error={formError}
+          onClose={() => setCategoryEditor(false)}
+          onSave={(categories, images) =>
+            save({
+              ...(catalogRef.current ?? catalog),
+              categories,
+              categoryImages: images,
+            })
+          }
+        />
+      )}
       {detail && (
         <TonicDetail
           key={detail.id}
@@ -1297,6 +1386,3 @@ export default function Home() {
     </>
   );
 }
-
-
-
