@@ -76,7 +76,7 @@ El catálogo del equipo (con notas internas y preparaciones) solo se entrega con
 ```powershell
 npm run lint
 npm run build
-node --experimental-strip-types --test tests/catalog.test.mjs
+node --experimental-strip-types --test tests/catalog.test.mjs tests/features.test.mjs tests/store.test.mjs
 ```
 
 Las pruebas cubren sinónimos, normalización, coincidencias falsas, visibilidad de borradores y validación de combinaciones.
@@ -96,6 +96,19 @@ Al abrir la aplicación se elige **Vendedor** o **Administrador**. El vendedor e
 La vista del vendedor sigue la referencia móvil: fondo gris, búsqueda grande, categorías fotográficas (Mate, Hierbas, Tónicos), accesos rápidos y catálogo en filas. Hay filtros Todo/Tónicos/Hierbas y las situaciones del cliente se expanden al necesitarlas. Las fotos cargadas se muestran en las filas; si falta una foto se usa un icono. La foto decorativa de categorías está en `public/botanical-categories.png`, generada con la herramienta integrada de ImageGen. Las fotos del catálogo tienen prioridad cuando están disponibles. Las fichas, cantidades y WhatsApp conservan sus funciones.
 
 La consulta `GET /api/catalog?scope=public` devuelve únicamente el catálogo público incluso si el navegador conserva una sesión de administrador. La selección visual de un rol no reemplaza la autorización del servidor.
+
+## Tienda online
+
+`/catalogo` es una tienda pública simple: sin cuentas de clientes, sin pagos online y sin stock. Los pedidos **no se guardan**: salen solo por WhatsApp. La dueña la administra desde **Administrar > Tienda**, que tiene cuatro secciones.
+
+- **Datos:** WhatsApp de la tienda (con código de país, solo números; es el que recibe pedidos y consultas), Instagram, Facebook, dirección, link del mapa y horarios. Se muestran al pie de la tienda y en cada ficha. Sin WhatsApp cargado, la tienda no ofrece Consultar ni Pedir por WhatsApp. Ya no se usa la variable `NEXT_PUBLIC_WHATSAPP_NUMBER`.
+- **Precios:** tabla con todos los tónicos y hierbas, con buscador y filtro por categoría. Al marcar productos aparece una barra al pie con **Precios masivos**: subir o bajar un porcentaje, redondear a un múltiplo o fijar un precio. Los cambios quedan pendientes y se guardan juntos con **Guardar cambios**. Si otra persona modificó el catálogo, el guardado avisa, conserva lo editado y permite actualizar.
+- **Visibilidad:** cada ficha y cada categoría tiene el interruptor **Visible en la tienda**. Lo oculto no aparece en la tienda, su link da 404 y no se puede pedir, pero el equipo lo sigue viendo en el buscador. Esta sección lista lo oculto y permite mostrarlo de nuevo.
+- **Promociones y combos:** el **precio de oferta** y **Válida hasta** se cargan en la ficha de cada producto; la oferta vencida deja de mostrarse sola. Un combo junta varios productos a un precio fijo, con foto y descripción, y tiene su propia ficha en `/catalogo/combos/<nombre>`. Dentro de un combo no se aplican ofertas. Un combo con un producto oculto no se muestra y el administrador lo avisa.
+
+La clienta agrega productos con el botón **+**, ve el carrito con el botón flotante, elige **Seguir comprando** o **Finalizar compra**, completa nombre, retiro o envío (con dirección) y nota, y **Pedir por WhatsApp** abre el chat de la tienda con el pedido armado. Los precios siempre se calculan en el servidor con el catálogo actual; el navegador guarda solo productos y cantidades. Si un producto se oculta, el carrito lo quita y avisa.
+
+El icono de la app (pantalla de inicio) es el logo, generado en `app/pwa-icon/route.tsx`.
 
 ## Vista previa al compartir (Open Graph)
 
