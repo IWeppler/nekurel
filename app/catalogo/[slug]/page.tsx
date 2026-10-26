@@ -1,4 +1,3 @@
-import { cache } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -6,11 +5,13 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Leaf, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { WhatsappIcon } from "@/app/whatsapp-icon";
 import { avoidOptions, type Plant, type Preparation } from "@/lib/catalog";
-import { loadShop } from "@/lib/shop";
 import { ShareButton } from "../share-button";
+import { AddButton } from "../cart";
+import { StoreInfo } from "../store-info";
+import { WasPrice } from "../storefront";
+import { getShop, pricesDate } from "../get-shop";
 
 export const dynamic = "force-dynamic";
-const getShop = cache(loadShop);
 const avoidLabel = (id: string) =>
   avoidOptions.find((o) => o.id === id)?.label ?? id;
 
@@ -71,8 +72,7 @@ export default async function ProductPage({
   const tonic = entry.tonic;
   const plant = item as Plant;
   const prep = item as Preparation;
-  const whatsapp =
-    process.env.NEXT_PUBLIC_WHATSAPP_NUMBER?.replace(/\D/g, "") ?? "";
+  const whatsapp = shop.store.whatsapp ?? "";
   const ingredients = tonic
     ? prep.ingredients.flatMap((i) => {
         const herb = shop.catalog.plants.find((p) => p.id === i.plantId);
@@ -91,10 +91,12 @@ export default async function ProductPage({
   const message = `Hola, quiero consultar por ${entry.name}${entry.price ? ` (${entry.price})` : ""}.`;
   return (
     <main className="shop shop-detail">
-      <Link className="detail-back" href="/catalogo">
-        <ArrowLeft size={20} aria-hidden="true" />
-        Catálogo
-      </Link>
+      <div className="detail-top">
+        <Link className="detail-back" href="/catalogo">
+          <ArrowLeft size={20} aria-hidden="true" />
+          Catálogo
+        </Link>
+      </div>
       <article className="detail-grid">
         <div className="detail-photo">
           <Leaf size={72} weight="duotone" aria-hidden="true" />
@@ -118,11 +120,21 @@ export default async function ProductPage({
             <p className="detail-scientific">{plant.scientificName}</p>
           )}
           {entry.price ? (
-            <p className="detail-price">{entry.price}</p>
+            <p className="detail-price">
+              {entry.regularPrice && (
+                <>
+                  <span className="promo-badge is-inline">Oferta</span>
+                  <WasPrice>{entry.regularPrice}</WasPrice>
+                </>
+              )}
+              <span>{entry.price}</span>
+            </p>
           ) : (
             <p className="detail-price is-consult">Consultar precio</p>
           )}
+          <p className="detail-date">Precio al {pricesDate()}.</p>
           <div className="detail-actions">
+            <AddButton offerKey={entry.key} name={entry.name} />
             {whatsapp && (
               <a
                 className="button primary"
@@ -189,6 +201,7 @@ export default async function ProductPage({
           )}
         </div>
       </article>
+      <StoreInfo store={shop.store} />
       <footer className="shop-foot">
         @ 2026 Nekurel. Todos los derechos reservados.
       </footer>

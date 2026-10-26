@@ -259,12 +259,12 @@ Actualizar esta tabla al terminar cada fase.
 |---|---|---|
 | 0. Commitear catálogo en grilla, fichas por slug e ícono de WhatsApp | Haiku 5.5 | Hecho (Opus 5.5) |
 | 1. Modelo de datos y precio vigente | Opus 5.5 | Hecho |
-| 2. Pestaña Tienda: datos de contacto | Sonnet 5.5 | Pendiente |
-| 3. Edición masiva de precios | Sonnet 5.5 | Pendiente |
-| 4. Ocultar productos y categorías | Sonnet 5.5 | Pendiente |
-| 5. Promociones y combos | Opus 5.5 y Sonnet 5.5 | Parte de Opus hecha; falta interfaz (Sonnet) |
-| 6. Carrito y pedido por WhatsApp | Opus 5.5 y Sonnet 5.5 | Parte de Opus hecha; falta interfaz (Sonnet) |
-| 7. Revisión final | Opus 5.5 | Prerrevisión hecha; falta correr la lista de chequeo al final (Sonnet o Opus) |
+| 2. Pestaña Tienda: datos de contacto | Sonnet 5.5 | Hecho |
+| 3. Edición masiva de precios | Sonnet 5.5 | Hecho |
+| 4. Ocultar productos y categorías | Sonnet 5.5 | Hecho |
+| 5. Promociones y combos | Opus 5.5 y Sonnet 5.5 | Hecho (modelo e interfaz) |
+| 6. Carrito y pedido por WhatsApp | Opus 5.5 y Sonnet 5.5 | Hecho (lógica e interfaz) |
+| 7. Revisión final | Opus 5.5 | Lista de chequeo corrida por Sonnet 5.5 (ver registro); falta revisión de Opus si se quiere |
 | 8. Tests, README y commit | Haiku 5.5 | Pendiente |
 
 ## 8. Registro de decisiones y notas entre fases
@@ -292,3 +292,19 @@ Actualizar esta tabla al terminar cada fase.
   - `lib/cart.ts`: carrito, validación del pedido, mensaje y link de WhatsApp. Límites: 99 por línea, 50 líneas, aviso si el link supera 4000 caracteres. Lo que escribe el cliente se aplana a una línea para que no pueda agregar renglones falsos al pedido.
   - Tests: 13 nuevos en `tests/store.test.mjs`.
   - Prerrevisión de la fase 7 y lista de chequeo final: ver la fase 7. **Queda una decisión para la dueña: el API público expone notas internas y recetas.**
+- 2026-10-26, fases 2, 3, 4 y las interfaces de 5 y 6 (Sonnet 5.5):
+  - **Archivos nuevos:** `app/store-tab.tsx` (pestaña Tienda con Datos, Precios, Visibilidad y Promociones y combos), `lib/store-tools.ts` (links de redes, edición masiva de precios; puro y con tests), `app/catalogo/cart.tsx` y `cart-store.ts` (carrito en el navegador), `app/catalogo/layout.tsx` (reparte `shop.offers` al carrito), `app/catalogo/store-info.tsx`, `app/catalogo/combos/[slug]/page.tsx`, `app/catalogo/get-shop.ts` (una lectura por pedido).
+  - `GET /api/catalog?scope=public` ahora incluye `store`. Se quitó `NEXT_PUBLIC_WHATSAPP_NUMBER` de `.env.example` (el README nunca la mencionaba). Service worker en `v20`.
+  - Los precios pendientes de la edición masiva viven en `StoreTab` (sobreviven al cambiar de sección o pestaña) y se pausa la actualización automática del catálogo mientras hay cambios sin guardar. Ante un conflicto de versión se conservan y aparece "Actualizar catálogo".
+  - Los combos se guardan con un botón propio (sin autoguardado) para no mandar al servidor combos a medio armar.
+  - **Resultado de la lista de chequeo (fase 7):**
+    1. Correcto: los componentes cliente reciben solo campos mapeados (`Product`, `ComboCardData`, `Offer`); `.item` y `shop.catalog` se usan solo en páginas de servidor.
+    2. Correcto: sin cuentas de precios en `app/` (el único `reduce` es el cálculo de gramos de `finder.tsx`).
+    3 y 4. Verificado con una base simulada: producto oculto 404, combo visible; ocultar/borrador/categoría oculta cubiertos por tests de `storeCategory` y `buildShop`; el carrito quita líneas que ya no se ofrecen y avisa.
+    5. Verificado: sin WhatsApp el panel del carrito lo explica y no hay botón; con número el mensaje sale por `wa.me/<número>` con el formato del ejemplo.
+    6. Correcto: `rel="noopener noreferrer"` en redes, mapa y WhatsApp; `@nekurel` pasa a `https://instagram.com/nekurel` (test); un valor tipo `javascript:` no se convierte en link.
+    7. Parcial: controles de 44 px o más, errores con `aria-describedby`/`aria-invalid`, contador con `aria-live`, tachado en gris `--muted`. No se midió contraste con herramienta ni se probó con lector de pantalla.
+    8. Páginas con "Precios al <fecha>" (catálogo, ficha, combo, carrito) y `VERSION` subida. No se probó sin conexión de verdad.
+    9. Verificado de punta a punta: con la versión del catálogo cambiada por otro lado, el guardado falla con el mensaje existente, los cambios siguen y tras actualizar se guardan.
+    10. 57 tests, `tsc` y `eslint` sin errores.
+  - **Pendientes:** probar los formularios de tónico y hierba (interruptor "Visible en la tienda", oferta) y el editor de categorías en el navegador; verificar `ANKORA_SELLER_CODE` en Vercel. El `.env.local` local tiene la clave escrita `ANKORA_SELLLER_CODE` (tres L), por eso la vista del vendedor no funciona en local. Fase 8 (README, commits) sin hacer.

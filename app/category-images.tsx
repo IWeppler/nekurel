@@ -19,6 +19,7 @@ export function CategoryImageEditor({ initial, initialCategories, onSave, onClos
         const original = categoryOptions.find(c => c.id === category.id);
         return <section className="category-edit-card" key={category.id} data-category={category.id} aria-label={`Categoría ${category.label}`}>
           <label className="field"><span>Nombre de la categoría</span><input aria-label={`Nombre de categoría ${category.label}`} value={category.label} required maxLength={100} onChange={e => setCategories(current => current.map(c => c.id === category.id ? { ...c, label: e.target.value } : c))} /></label>
+          <label className="check store-visible"><input type="checkbox" checked={!category.hidden} onChange={e => setCategories(current => current.map(c => c.id === category.id ? { ...c, hidden: e.target.checked ? undefined : true } : c))} />Visible en la tienda</label>
           {!images[category.id] && <div className="category-edit-preview"><span className={`category-photo${original ? " category-fallback" : " category-empty"}`} style={{ backgroundPosition: `${original?.position ?? "50%"} center` }} role="img" aria-label={`Imagen de ${category.label}`} />{!original && <span className="category-empty-label">Agregá una imagen</span>}</div>}
           <ImageField label="Imagen de categoría" value={images[category.id]} onChange={image => setImages(current => ({ ...current, [category.id]: image }))} onBusy={setUploading} />
         </section>;

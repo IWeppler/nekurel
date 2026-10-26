@@ -31,6 +31,7 @@ import { CategoryPicker } from "./category-picker";
 import { CategoryImageEditor } from "./category-images";
 import { AvoidSelector } from "./avoid-selector";
 import { AutoSaveForm } from "./auto-save-form";
+import { StoreTab } from "./store-tab";
 import {
   getAvoidOptions,
   getCategories,
@@ -38,13 +39,14 @@ import {
   formatPrice,
   normalize,
   searchCatalog,
+  storeToday,
   type Catalog,
   type Plant,
   type Preparation,
 } from "@/lib/catalog";
 import { importTonics, type ImportReport } from "@/lib/csv";
 
-type Tab = "search" | "tonics" | "herbs";
+type Tab = "search" | "tonics" | "herbs" | "store";
 type Draft = { name: string; amount: string };
 const proportions = [
   "0.5 partes",
@@ -61,7 +63,7 @@ const proportions = [
   "9 partes",
   "10 partes",
 ];
-const labels = { tonics: "Tónicos", herbs: "Hierbas" };
+const labels = { tonics: "Tónicos", herbs: "Hierbas", store: "Tienda" };
 const splitTags = (text: string) => [
   ...new Set(
     text
@@ -103,33 +105,96 @@ const parsePrice = (value: string) => {
 function PriceFields({
   item,
 }: {
-  item: { price?: number; priceUnit?: string };
+  item: {
+    price?: number;
+    priceUnit?: string;
+    promoPrice?: number;
+    promoUntil?: string;
+    hidden?: boolean;
+  };
 }) {
+  const [price, setPrice] = useState(String(item.price ?? ""));
+  const [promo, setPromo] = useState(String(item.promoPrice ?? ""));
+  const [until, setUntil] = useState(item.promoUntil ?? "");
+  const base = parsePrice(price);
+  const sale = parsePrice(promo);
+  // Saved anyway (so lowering prices in bulk never blocks a save), but it does not apply.
+  const promoWarning =
+    sale === undefined
+      ? ""
+      : base === undefined
+        ? "Esta oferta no se aplica porque el producto no tiene precio."
+        : sale >= base
+          ? "Esta oferta no se aplica: tiene que ser menor al precio de venta."
+          : until && until < storeToday()
+            ? "Esta oferta ya venció: no se muestra en la tienda."
+            : "";
   return (
-    <div className="form-grid">
-      <label className="field">
-        <span>Precio de venta ($)</span>
+    <>
+      <div className="form-grid">
+        <label className="field">
+          <span>Precio de venta ($)</span>
+          <input
+            name="price"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Ej: 2500"
+          />
+        </label>
+        <label className="field">
+          <span>El precio es por</span>
+          <input
+            name="priceUnit"
+            defaultValue={item.priceUnit ?? ""}
+            maxLength={50}
+            placeholder="Ej: 100 g, bolsita"
+          />
+          <small>Opcional. Sin precio, la ficha no muestra ninguno.</small>
+        </label>
+      </div>
+      <div className="form-grid">
+        <label className="field">
+          <span>Precio de oferta ($)</span>
+          <input
+            name="promoPrice"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={promo}
+            onChange={(e) => setPromo(e.target.value)}
+            placeholder="Opcional"
+            aria-describedby="promo-hint"
+          />
+          <small id="promo-hint" className={promoWarning ? "field-warning" : undefined}>
+            {promoWarning ||
+              "Opcional. Se muestra el precio normal tachado. Solo aplica a compras sueltas, no dentro de un combo."}
+          </small>
+        </label>
+        <label className="field">
+          <span>Oferta válida hasta</span>
+          <input
+            name="promoUntil"
+            type="date"
+            value={until}
+            onChange={(e) => setUntil(e.target.value)}
+          />
+          <small>Último día de la oferta. Vacío: sin fecha de fin.</small>
+        </label>
+      </div>
+      <label className="check store-visible">
         <input
-          name="price"
-          type="number"
-          inputMode="decimal"
-          min={0}
-          step="any"
-          defaultValue={item.price ?? ""}
-          placeholder="Ej: 2500"
+          type="checkbox"
+          name="visible"
+          defaultChecked={!item.hidden}
         />
+        Visible en la tienda
       </label>
-      <label className="field">
-        <span>El precio es por</span>
-        <input
-          name="priceUnit"
-          defaultValue={item.priceUnit ?? ""}
-          maxLength={50}
-          placeholder="Ej: 100 g, bolsita"
-        />
-        <small>Opcional. Sin precio, la ficha no muestra ninguno.</small>
-      </label>
-    </div>
+    </>
   );
 }
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
@@ -223,6 +288,7 @@ export default function Home() {
   const [deleting, setDeleting] = useState<Preparation | Plant | null>(null);
   const flushEditor = useRef<() => Promise<boolean>>(async () => true);
   const [report, setReport] = useState<ImportReport | null>(null);
+  const [storeDirty, setStoreDirty] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const load = useCallback(async () => {
     try {
@@ -281,7 +347,8 @@ export default function Home() {
         !deleting &&
         !login &&
         !busy &&
-        !report
+        !report &&
+        !storeDirty
       )
         void load();
     };
@@ -291,7 +358,17 @@ export default function Home() {
       window.removeEventListener("focus", refresh);
       window.clearInterval(timer);
     };
-  }, [load, editor, herbEditor, categoryEditor, deleting, login, busy, report]);
+  }, [
+    load,
+    editor,
+    herbEditor,
+    categoryEditor,
+    deleting,
+    login,
+    busy,
+    report,
+    storeDirty,
+  ]);
   const plantName = useCallback(
     (id: string) =>
       catalog?.plants.find((p) => p.id === id)?.name || "Hierba no disponible",
@@ -395,6 +472,9 @@ export default function Home() {
       avoid,
       price: parsePrice(text("price")),
       priceUnit: text("priceUnit") || undefined,
+      promoPrice: parsePrice(text("promoPrice")),
+      promoUntil: text("promoUntil") || undefined,
+      hidden: form.get("visible") ? undefined : true,
     };
     const next = {
       ...catalog,
@@ -440,6 +520,9 @@ export default function Home() {
       published: true,
       price: parsePrice(text("price")),
       priceUnit: text("priceUnit") || undefined,
+      promoPrice: parsePrice(text("promoPrice")),
+      promoUntil: text("promoUntil") || undefined,
+      hidden: form.get("visible") ? undefined : true,
     };
     if (
       !(await save({
@@ -555,7 +638,8 @@ export default function Home() {
   const setDraft = (index: number, patch: Partial<Draft>) =>
     setDrafts(drafts.map((d, n) => (n === index ? { ...d, ...patch } : d)));
 
-  const adminWorkspace = admin && desktop && tab !== "search";
+  const adminWorkspace =
+    admin && desktop && (tab === "tonics" || tab === "herbs");
   const screenOpen = Boolean(
     login ||
     (categoryEditor && admin) ||
@@ -945,6 +1029,7 @@ export default function Home() {
             {admin && (
               <header className="admin-header">
                 <div className="admin-search-row">
+                  {tab !== "store" && (
                   <label className="admin-search">
                     <MagnifyingGlass size={22} aria-hidden="true" />
                     <input
@@ -960,6 +1045,7 @@ export default function Home() {
                       }
                     />
                   </label>
+                  )}
                   <nav className="segmented" aria-label="Secciones">
                     {(Object.keys(labels) as (keyof typeof labels)[]).map(
                       (item) => (
@@ -982,6 +1068,8 @@ export default function Home() {
                       ),
                     )}
                   </nav>
+                  {tab !== "store" && (
+                  <>
                   <label className="button admin-import">
                     <UploadSimple size={20} aria-hidden="true" />
                     Importar CSV
@@ -1005,6 +1093,8 @@ export default function Home() {
                     <Plus size={20} aria-hidden="true" />
                     {tab === "herbs" ? "Nueva hierba" : "Nuevo tónico"}
                   </button>
+                  </>
+                  )}
                 </div>
               </header>
             )}
@@ -1069,6 +1159,19 @@ export default function Home() {
                 />
               </>
             )}
+            {admin && catalog && (
+              <StoreTab
+                catalog={catalog}
+                busy={busy}
+                error={formError}
+                active={tab === "store"}
+                flushRef={flushEditor}
+                onSave={save}
+                onReload={() => void load()}
+                onClearError={() => setFormError("")}
+                onDirty={setStoreDirty}
+              />
+            )}
             <div className={adminWorkspace ? "admin-workspace" : undefined}>
               <div className="admin-catalog">
                 {admin && tab === "tonics" && (
@@ -1107,6 +1210,9 @@ export default function Home() {
                                   >
                                     {item.name}
                                   </button>
+                                  {item.hidden && (
+                                    <span className="hidden-tag">Oculto</span>
+                                  )}
                                 </th>
                                 <td>{item.ingredients.length}</td>
                                 <td>{formatPrice(item) || "—"}</td>
@@ -1191,6 +1297,9 @@ export default function Home() {
                                     >
                                       {plant.name}
                                     </button>
+                                    {plant.hidden && (
+                                      <span className="hidden-tag">Oculto</span>
+                                    )}
                                   </th>
                                   <td className="table-scientific">
                                     {plant.scientificName || "—"}

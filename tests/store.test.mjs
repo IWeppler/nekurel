@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { seedCatalog, assignSlugs, comboSlug, formatMoney } from '../lib/catalog.ts';
 import { buildShop } from '../lib/shop.ts';
+import { socialLink, whatsappDigits, parsePriceText, bulkPrice, bulkError, priceRows, resolveEdit, summarizeEdits, applyPriceEdits } from '../lib/store-tools.ts';
 import { parseCart, serializeCart, addToCart, setQty, removeFromCart, canAdd, cartCount, resolveCart, validateOrder, orderMessage, orderUrl, MAX_LINES, ORDER_URL_LIMIT } from '../lib/cart.ts';
 
 // Online store (docs/tienda-online.md, fases 5 y 6)
@@ -144,4 +145,76 @@ test('el link de WhatsApp exige el número de la tienda y avisa si es muy largo'
   assert.equal(url, 'https://wa.me/5493491123456?text=Hola%20%26%20chau');
   assert.equal(tooLong, false);
   assert.equal(orderUrl('5493491123456', 'ñ'.repeat(ORDER_URL_LIMIT)).tooLong, true);
+});
+
+// Tienda tab (fases 2 y 3)
+test('los usuarios de redes se convierten en links seguros', () => {
+  assert.deepEqual(socialLink('@nekurel', 'instagram'), { href: 'https://instagram.com/nekurel', label: '@nekurel' });
+  assert.deepEqual(socialLink('nekurel', 'facebook'), { href: 'https://facebook.com/nekurel', label: 'nekurel' });
+  assert.equal(socialLink('instagram.com/nekurel/', 'instagram').href, 'https://instagram.com/nekurel');
+  assert.equal(socialLink('https://www.facebook.com/nekurel', 'facebook').href, 'https://www.facebook.com/nekurel');
+  assert.equal(socialLink('', 'instagram'), undefined);
+  assert.equal(socialLink('javascript:alert(1)', 'instagram'), undefined, 'nunca un link ejecutable');
+  assert.equal(socialLink('mi tienda de hierbas', 'instagram'), undefined);
+});
+test('el WhatsApp queda en solo dígitos', () => {
+  assert.equal(whatsappDigits('+54 9 3491-123456'), '5493491123456');
+  assert.equal(whatsappDigits('(0349) 15-123'), '034915123');
+});
+test('los precios escritos se validan con un mensaje claro', () => {
+  assert.deepEqual(parsePriceText(''), {});
+  assert.deepEqual(parsePriceText(' 1500,5 '), { value: 1500.5 });
+  assert.match(parsePriceText('-3').error, /0 o más/);
+  assert.match(parsePriceText('abc').error, /0 o más/);
+  assert.ok(parsePriceText('1e12').error);
+});
+test('las acciones masivas suben, bajan, redondean y fijan', () => {
+  assert.equal(bulkPrice(1000, { kind: 'percent', percent: 10 }), 1100);
+  assert.equal(bulkPrice(1000, { kind: 'percent', percent: -15 }), 850);
+  assert.equal(bulkPrice(333, { kind: 'percent', percent: 10 }), 366.3);
+  assert.equal(bulkPrice(1020, { kind: 'round', step: 50 }), 1000);
+  assert.equal(bulkPrice(1030, { kind: 'round', step: 50 }), 1050);
+  assert.equal(bulkPrice(undefined, { kind: 'percent', percent: 10 }), undefined, 'sin precio no hay nada que ajustar');
+  assert.equal(bulkPrice(undefined, { kind: 'fixed', price: 2500 }), 2500);
+  assert.ok(bulkError({ kind: 'percent', percent: -100 }));
+  assert.ok(bulkError({ kind: 'percent', percent: 0 }));
+  assert.ok(bulkError({ kind: 'round', step: 0 }));
+  assert.ok(bulkError({ kind: 'fixed', price: -1 }));
+  assert.equal(bulkError({ kind: 'percent', percent: 10 }), undefined);
+});
+test('subir 10% a 30 productos es un solo catálogo listo para guardar', () => {
+  const catalog = structuredClone(seedCatalog);
+  catalog.plants.forEach((p, n) => { p.price = 1000 + n * 100; });
+  const rows = priceRows(catalog);
+  const edits = {};
+  for (const row of rows.slice(0, 30)) { const price = bulkPrice(resolveEdit(row, undefined).price, { kind: 'percent', percent: 10 }); if (price !== undefined) edits[row.id] = { price: String(price) }; }
+  const summary = summarizeEdits(rows, edits, catalog);
+  assert.equal(summary.changed, rows.slice(0, 30).filter(r => r.price !== undefined).length);
+  assert.ok(summary.changed > 10, 'el caso cubre muchos productos');
+  assert.equal(summary.errors, 0);
+  const next = applyPriceEdits(catalog, edits);
+  assert.equal(next.plants[0].price, 1100);
+  assert.equal(next.revision, catalog.revision, 'la revisión no se toca: la sube el servidor al guardar');
+  assert.equal(next.preparations[0], catalog.preparations[0], 'lo que no cambió queda igual');
+  assert.equal(catalog.plants[0].price, 1000, 'no modifica el catálogo original');
+});
+test('los precios inválidos no se aplican y se cuentan como errores', () => {
+  const catalog = structuredClone(seedCatalog); catalog.plants[0].price = 1500;
+  const rows = priceRows(catalog);
+  const edits = { 'plant-1': { price: '-5' }, 'plant-2': { price: '800', unit: ' 100 g ' } };
+  const summary = summarizeEdits(rows, edits, catalog);
+  assert.deepEqual([summary.changed, summary.errors], [1, 1]);
+  const next = applyPriceEdits(catalog, edits);
+  assert.equal(next.plants[0].price, 1500, 'el inválido queda como estaba');
+  assert.deepEqual([next.plants[1].price, next.plants[1].priceUnit], [800, '100 g']);
+  assert.equal(applyPriceEdits(catalog, { 'plant-1': { price: '' } }).plants[0].price, undefined, 'vaciar el precio lo quita');
+});
+test('bajar un precio por debajo de la oferta avisa que la oferta dejará de aplicar', () => {
+  const catalog = pricedCatalog();
+  const rows = priceRows(catalog);
+  assert.equal(summarizeEdits(rows, { 'prep-1': { price: '2400' } }, catalog).lowersPromo, 1);
+  assert.equal(summarizeEdits(rows, { 'prep-1': { price: '4000' } }, catalog).lowersPromo, 0);
+  const tonic = priceRows(catalog).find(r => r.id === 'prep-1');
+  assert.deepEqual(tonic.categoryIds, ['tonics']);
+  assert.equal(tonic.categoryLabel, 'Tónicos');
 });
