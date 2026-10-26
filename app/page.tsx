@@ -34,6 +34,7 @@ import { AutoSaveForm } from "./auto-save-form";
 import {
   getAvoidOptions,
   getCategories,
+  formatPrice,
   normalize,
   searchCatalog,
   type Catalog,
@@ -78,6 +79,25 @@ const newHerb = (name: string): Plant => ({
   published: true,
 });
 
+const parsePrice = (value: string) => {
+  const number = Number(value.replace(",", "."));
+  return value.trim() && Number.isFinite(number) && number >= 0 ? number : undefined;
+};
+function PriceFields({ item }: { item: { price?: number; priceUnit?: string } }) {
+  return (
+    <div className="form-grid">
+      <label className="field">
+        <span>Precio de venta ($)</span>
+        <input name="price" type="number" inputMode="decimal" min={0} step="any" defaultValue={item.price ?? ""} placeholder="Ej: 2500" />
+      </label>
+      <label className="field">
+        <span>El precio es por</span>
+        <input name="priceUnit" defaultValue={item.priceUnit ?? ""} maxLength={50} placeholder="Ej: 100 g, bolsita" />
+        <small>Opcional. Sin precio, la ficha no muestra ninguno.</small>
+      </label>
+    </div>
+  );
+}
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: "no-store", ...options });
   const data = await response.json();
@@ -106,7 +126,7 @@ function Field({
     <label className="field">
       <span>
         {label}
-        {required && <span className="required"> *</span>}
+        {required && <span className="required-tag">Obligatorio</span>}
       </span>
       {multiline ? (
         <textarea
@@ -318,6 +338,8 @@ export default function Home() {
       ingredients,
       instructions: text("instructions"),
       avoid,
+      price: parsePrice(text("price")),
+      priceUnit: text("priceUnit") || undefined,
     };
     const next = {
       ...catalog,
@@ -361,6 +383,8 @@ export default function Home() {
       notes: herbEditor.notes,
       categoryIds: form.getAll("categoryIds").map(String),
       published: true,
+      price: parsePrice(text("price")),
+      priceUnit: text("priceUnit") || undefined,
     };
     if (
       !(await save({
@@ -488,6 +512,7 @@ export default function Home() {
       }}
     >
       <AutoSaveForm
+        error={formError}
         key={editor.id}
         registerRef={flushEditor}
         paused={busy}
@@ -502,6 +527,7 @@ export default function Home() {
         />
         <ImageField value={image} onChange={setImage} onBusy={setBusy} />
         {catalog && <CategoryPicker catalog={catalog} item={editor} />}
+        <PriceFields item={editor} />
         <div className="form-grid">
           <Field
             label="Se utiliza para"
@@ -519,7 +545,7 @@ export default function Home() {
           />
         </div>
         <fieldset className="ingredients-editor">
-          <legend>Hierbas y proporciones</legend>
+          <legend>Hierbas y proporciones <span className="required-tag">Obligatorio: al menos una hierba</span></legend>
           <p>
             Escribí el nombre y elegí una hierba existente. Si no está, se
             agrega sola. Con proporciones como &quot;2 partes&quot; el empleado
@@ -540,7 +566,7 @@ export default function Home() {
                   )
                 }
               />
-              <select aria-label={`Proporción ${index + 1}`} value={draft.amount} required onChange={e => setDraft(index, { amount: e.target.value })}>
+              <select aria-label={`Proporción ${index + 1}`} value={draft.amount} onChange={e => setDraft(index, { amount: e.target.value })}>
                 <option value="">Elegir partes</option>
                 {draft.amount && !proportions.includes(draft.amount) && <option value={draft.amount}>{draft.amount}</option>}
                 {proportions.map(amount => <option key={amount} value={amount}>{amount}</option>)}
@@ -596,6 +622,7 @@ export default function Home() {
       }}
     >
       <AutoSaveForm
+        error={formError}
         key={herbEditor.id}
         registerRef={flushEditor}
         paused={busy}
@@ -610,6 +637,7 @@ export default function Home() {
         />
         <ImageField value={image} onChange={setImage} onBusy={setBusy} />
         {catalog && <CategoryPicker catalog={catalog} item={herbEditor} />}
+        <PriceFields item={herbEditor} />
         <Field
           label="Nombre científico"
           name="scientificName"
@@ -943,6 +971,7 @@ export default function Home() {
                           <tr>
                             <th scope="col">Nombre</th>
                             <th scope="col">Hierbas</th>
+                            <th scope="col">Precio</th>
                             <th scope="col">
                               <span className="sr-only">Acciones</span>
                             </th>
@@ -971,6 +1000,7 @@ export default function Home() {
                                   </button>
                                 </th>
                                 <td>{item.ingredients.length}</td>
+                                <td>{formatPrice(item) || "—"}</td>
                                 <td>
                                   <button
                                     className="table-delete danger-text"
@@ -1019,6 +1049,7 @@ export default function Home() {
                             <th scope="col">Nombre científico</th>
                             <th scope="col">Usos</th>
                             <th scope="col">Tónicos</th>
+                            <th scope="col">Precio</th>
                             <th scope="col">
                               <span className="sr-only">Acciones</span>
                             </th>
@@ -1064,6 +1095,7 @@ export default function Home() {
                                     </span>
                                   </td>
                                   <td>{count}</td>
+                                  <td>{formatPrice(plant) || "—"}</td>
                                   <td>
                                     <button
                                       className="table-delete danger-text"

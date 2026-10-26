@@ -1,6 +1,6 @@
 import { avoidOptions, normalize, type Catalog, type Plant, type Preparation } from "./catalog.ts";
 
-const headers = ["Nombre", "Usos", "Sinónimos", "Hierbas", "Preparación", "Advertencias", "Notas", "No recomendado en", "Habilitado", "Imagen"];
+const headers = ["Nombre", "Usos", "Sinónimos", "Hierbas", "Preparación", "Advertencias", "Notas", "No recomendado en", "Habilitado", "Imagen", "Precio", "Unidad del precio"];
 const columnNames: Record<string, string> = {
   nombre: "name", tonico: "name", name: "name",
   usos: "uses", "se utiliza para": "uses",
@@ -12,6 +12,8 @@ const columnNames: Record<string, string> = {
   "no recomendado en": "avoid", evitar: "avoid",
   habilitado: "published", publicado: "published", estado: "published",
   imagen: "image",
+  precio: "price", "precio de venta": "price",
+  "unidad del precio": "priceUnit", "precio por": "priceUnit",
 };
 
 /** Parses CSV text. The delimiter (comma or semicolon) is detected from the first line. */
@@ -51,7 +53,7 @@ export function exportTonics(catalog: Catalog): string {
     p.ingredients.map(i => `${herb(i.plantId)}:${i.amount}`).join("|"),
     p.instructions, p.warnings, p.notes,
     (p.avoid ?? []).map(id => avoidOptions.find(o => o.id === id)?.label ?? id).join("|"),
-    p.published ? "Sí" : "No", p.image || "",
+    p.published ? "Sí" : "No", p.image || "", p.price === undefined ? "" : String(p.price), p.priceUnit || "",
   ]);
   return "﻿" + [headers, ...rows].map(r => r.map(c => quote(c, ";")).join(";")).join("\r\n") + "\r\n";
 }
@@ -100,10 +102,15 @@ export function importTonics(catalog: Catalog, text: string): ImportReport {
     const existing = preparations.find(p => normalize(p.name) === normalize(name));
     const image = columns.includes("image") ? get("image") : existing?.image;
     if (image && !/^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(image)) { report.errors.push(`Fila ${line} (${name}): la imagen no corresponde a un archivo del catálogo.`); return; }
+    const priceText = get("price").replace(/[$s]/g, "").replace(",", ".");
+    const price = columns.includes("price") ? (priceText ? Number(priceText) : undefined) : existing?.price;
+    if (price !== undefined && (!Number.isFinite(price) || price < 0)) { report.errors.push(`Fila ${line} (${name}): el precio no es un número válido.`); return; }
+    const priceUnit = columns.includes("priceUnit") ? get("priceUnit") || undefined : existing?.priceUnit;
     const item: Preparation = {
       id: existing?.id ?? crypto.randomUUID(), categoryIds: existing?.categoryIds, name, uses: list(get("uses"), true), aliases: list(get("aliases"), true), ingredients,
       instructions: get("instructions"), warnings: get("warnings"), notes: get("notes"), avoid: parseAvoid(get("avoid")), published: false,
       ...(image !== undefined ? { image } : {}),
+      ...(price !== undefined ? { price } : {}), ...(priceUnit ? { priceUnit } : {}),
     };
     const complete = Boolean(item.instructions && item.uses.length && ingredients.every(i => i.amount));
     item.published = truthy(get("published")) && complete;

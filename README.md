@@ -22,6 +22,13 @@ El empleado entra directamente al buscador. El dueño usa **Administrar** y la c
 4. Habilitar el tónico después de revisarlo. Los borradores no los ve el equipo.
 5. Buscar como empleado: se listan los tónicos que coinciden con el síntoma o la necesidad.
 
+## Precios y campos obligatorios
+
+- Tónicos y hierbas tienen **Precio de venta ($)** y **El precio es por** (por ejemplo `100 g` o `bolsita`). Ambos son opcionales: sin precio, la ficha no muestra ninguno. El precio aparece en la lista, el detalle y el mensaje de WhatsApp.
+- Lo único obligatorio es el nombre y, en los tónicos, al menos una hierba. Se marca con la etiqueta **Obligatorio**. Usos, preparación, proporciones y advertencias se pueden completar después.
+- Los formularios se guardan solos y tienen un botón **Guardar** que confirma con "Se guardó correctamente". Si falla, el error se muestra arriba del formulario y en los logs del servidor con el prefijo `[catalog PUT]`.
+- El CSV de tónicos tiene las columnas **Precio** y **Unidad del precio**. Un CSV sin esas columnas no borra los precios existentes.
+
 ## Funciones
 
 - **Buscar** por síntoma, sinónimo, nombre del tónico o nombre de una hierba. Los tónicos más consultados aparecen primero cuando no se busca nada.
@@ -31,7 +38,7 @@ El empleado entra directamente al buscador. El dueño usa **Administrar** y la c
 - **Hierbas**: vista del administrador con la cantidad de tónicos que usa cada una.
 - **Importar y exportar CSV** en Tónicos. Columnas: Nombre, Usos, Sinónimos, Hierbas (`Manzanilla:2 partes|Menta:1 parte`), Preparación, Advertencias, Notas, No recomendado en, Habilitado. Los tónicos se identifican por nombre; los incompletos quedan en borrador.
 - **App instalable y sin conexión** (PWA): al abrirla desde el navegador se puede agregar a la pantalla de inicio. Funciona sin wifi con la última versión guardada. Requiere `npm run build` y `npm start`; en desarrollo no se activa.
-- Las consultas se cuentan en `data/usage.json`.
+- Las consultas se cuentan en Supabase.
 
 El administrador puede **Previsualizar borradores**, con un aviso explícito. Los ejemplos provienen del brief y no constituyen indicaciones clínicas validadas. El sistema no completa ni infiere propiedades, dosis o contraindicaciones.
 
@@ -42,26 +49,26 @@ Para una nueva instalación, copiar `.env.example` a `.env.local` y definir:
 ```dotenv
 ANKORA_ADMIN_PASSWORD=una-contraseña-propia
 ANKORA_SESSION_SECRET=un-secreto-aleatorio-de-al-menos-32-caracteres
-# ANKORA_DATA_DIR=C:/ruta/absoluta/a/datos
+NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_...
 ```
 
 En esta instalación se creó una contraseña local inicial: `hola123`. Cambiarla antes de exponer el servidor fuera de una red de confianza. Reiniciar el servidor tras modificar las variables. Cambiar también el secreto invalida sesiones anteriores.
 
 La contraseña se valida en el servidor. La sesión dura 8 horas y usa una cookie HttpOnly, SameSite=Strict y firma HMAC. Las escrituras requieren sesión de administrador y el mismo origen. El acceso tiene un límite global local de 10 intentos fallidos por 15 minutos.
 
-## Supabase (producción)
+## Supabase
 
-Vercel no permite escribir archivos, así que en producción el catálogo, el uso y las fotos se guardan en Supabase. Con `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SECRET_KEY` definidas, la app usa Supabase; sin ellas, usa la carpeta `data/`.
+El catálogo, el uso y las fotos se guardan en Supabase, tanto en local como en Vercel.
 
-1. Ejecutar `supabase/schema.sql` en el SQL Editor de Supabase (crea la tabla `app_data`, las funciones y el bucket privado `images`).
-2. Definir `SUPABASE_SECRET_KEY` en Vercel y en `.env.local`. Nunca con prefijo `NEXT_PUBLIC_`.
-3. Opcional: copiar los datos locales con `node --env-file=.env.local scripts/upload-data.mjs`. Reemplaza el catálogo y el uso guardados en Supabase.
+1. Ejecutar `supabase/schema.sql` en el SQL Editor de Supabase. Crea la tabla `app_data`, las funciones y el bucket privado `images`.
+2. Definir `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SECRET_KEY` en Vercel y en `.env.local`. La clave secreta nunca lleva prefijo `NEXT_PUBLIC_`.
 
 ## Persistencia y alcance
 
-El catálogo se guarda al primer cambio en `data/catalog.json`, fuera de Git. Todos los dispositivos consultan ese mismo archivo. La interfaz actualiza el catálogo cada 30 segundos y al recuperar foco. Hay guardado mediante reemplazo atómico, cola de escrituras y control de versión: si dos administradores editan a la vez, el segundo debe actualizar antes de guardar.
+Si todavía no hay catálogo guardado, la app muestra el catálogo inicial y lo guarda en Supabase al primer cambio. Todos los dispositivos consultan el mismo catálogo. La interfaz lo actualiza cada 30 segundos y al recuperar foco. Hay control de versión: si dos administradores editan a la vez, el segundo debe actualizar antes de guardar.
 
-Respaldar `data/catalog.json`. El MVP está pensado para **un único proceso Node y un disco persistente**. No usar múltiples instancias ni almacenamiento efímero/serverless sin migrar a una base de datos. La consulta es accesible a quien tenga acceso al servidor, incluidas las notas internas del equipo; usarlo en la red de la herboristería. Eliminar una planta utilizada por una mezcla está bloqueado hasta quitarla de sus preparados.
+La consulta es accesible a quien tenga acceso a la web, incluidas las notas internas del equipo. Eliminar una planta utilizada por una mezcla está bloqueado hasta quitarla de sus preparados.
 
 ## Verificar
 
@@ -75,7 +82,7 @@ Las pruebas cubren sinónimos, normalización, coincidencias falsas, visibilidad
 
 ## Imágenes, hierbas independientes y WhatsApp
 
-- Desde **Tónicos > Editar** o **Hierbas > Editar hierba**, subir una foto JPG, PNG o WebP (hasta 5 MB). Guardar la ficha para asociarla. Se puede cambiar o quitar la foto sin afectar la receta. Los archivos se guardan en `data/images/` (o en `ANKORA_DATA_DIR/images/`); respaldar esa carpeta junto con el catálogo. Las fotos son accesibles a quienes tienen acceso al servidor. Quitar una foto de una ficha no elimina el archivo, para conservar otras referencias.
+- Desde **Tónicos > Editar** o **Hierbas > Editar hierba**, subir una foto JPG, PNG o WebP (hasta 5 MB). Guardar la ficha para asociarla. Se puede cambiar o quitar la foto sin afectar la receta. Los archivos se guardan en el bucket `images` de Supabase. Las fotos son accesibles a quienes tienen acceso a la web. Quitar una foto de una ficha no elimina el archivo, para conservar otras referencias.
 - **Hierbas > Nueva hierba** permite crear fichas independientes de un tónico. Cargar usos y formas de uso (`mate`, `infusión`, etc.), propiedades, nombre científico y sinónimos. El buscador muestra tónicos y hierbas en dos grupos. Los ejemplos iniciales de Menta, Cedrón y Burrito incluyen `mate`; un catálogo ya guardado conserva sus etiquetas y se puede actualizar desde el panel.
 - En el detalle de un tónico, seleccionar las hierbas que se van a incluir. El cálculo de gramos usa únicamente esa selección. Si se omiten ingredientes, completar las indicaciones de preparación para esa selección; no se cambia la receta original del dueño ni se transfieren automáticamente sus usos a la mezcla modificada.
 - **Compartir por WhatsApp** pide un número con código de país, permite revisar el mensaje y abre `wa.me` con el texto precargado. El vendedor confirma el envío en WhatsApp. No se guarda el número ni se envían mensajes automáticamente. El mensaje incluye ingredientes, cantidades y advertencias; excluye notas internas. También se puede compartir la ficha de una hierba individual. Las imágenes se muestran en la aplicación; WhatsApp comparte texto, sin adjuntar las fotos.

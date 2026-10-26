@@ -9,10 +9,15 @@ export async function GET(request: Request) {
     if (new URL(request.url).searchParams.get("scope") !== "public" && await isAdmin()) return Response.json(catalog, { headers: { "Cache-Control": "no-store" } });
     const visible = searchCatalog(catalog, "");
     return Response.json({ ...visible, revision: catalog.revision, categoryImages: catalog.categoryImages, categories: catalog.categories }, { headers: { "Cache-Control": "no-store", "X-Catalog-Scope": "public" } });
-  } catch { return Response.json({ error: "No se pudo leer el catálogo. Revisá el archivo del servidor." }, { status: 500 }); }
+  } catch (error) {
+    console.error(error);
+    return Response.json({ error: "No se pudo leer el catálogo desde Supabase." }, { status: 500 });
+  }
 }
 export async function PUT(request: Request) {
-  if (!sameOrigin(request) || !await isAdmin()) return Response.json({ error: "Ingresá como administrador para guardar." }, { status: 403 });
+  const origin = sameOrigin(request), admin = origin && await isAdmin();
+  if (!admin) console.warn(`[catalog PUT] forbidden: sameOrigin=${origin} origin=${request.headers.get("origin")} host=${request.headers.get("host")}`);
+  if (!admin) return Response.json({ error: "Ingresá como administrador para guardar." }, { status: 403 });
   try {
     const text = await request.text();
     if (text.length > 2_000_000) return Response.json({ error: "El catálogo es demasiado grande." }, { status: 413 });
@@ -20,9 +25,12 @@ export async function PUT(request: Request) {
     validateCatalog(data);
     return Response.json(await saveCatalog(data));
   } catch (error) {
-    if (error instanceof ConflictError) return Response.json({ error: error.message }, { status: 409 });
-    if (error instanceof SyntaxError || (error instanceof Error && !("code" in error))) return Response.json({ error: error.message }, { status: 400 });
-    return Response.json({ error: "No se pudo guardar. Tus cambios siguen en el formulario; intentá nuevamente." }, { status: 500 });
+    if (error instanceof ConflictError) { console.warn("[catalog PUT] conflict:", error.message); return Response.json({ error: error.message }, { status: 409 }); }
+    if (error instanceof SyntaxError || (error instanceof Error && !("code" in error))) { console.warn("[catalog PUT] rejected:", error.message); return Response.json({ error: error.message }, { status: 400 }); }
+    console.error("[catalog PUT] failed:", error);
+    // Only administrators reach this point, so the cause is returned to make production failures diagnosable.
+    const cause = error instanceof Error ? error.message.slice(0, 300) : String(error);
+    return Response.json({ error: `No se pudo guardar: ${cause}` }, { status: 500 });
   }
 }
 

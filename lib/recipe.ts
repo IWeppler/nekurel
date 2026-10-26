@@ -1,4 +1,4 @@
-import { avoidOptions, type Catalog, type Plant, type Preparation } from "./catalog.ts";
+import { avoidOptions, formatPrice, type Catalog, type Plant, type Preparation } from "./catalog.ts";
 
 export const partsOf = (amount: string) => {
   const match = amount.trim().match(/^(\d+(?:[.,]\d+)?)\s*partes?\s*$/i);
@@ -24,11 +24,12 @@ export function recipeText(prep: Preparation, catalog: Catalog, options: { selec
     ...ingredients.map((i, n) => `- ${herb(i.plantId)?.name ?? "Hierba no disponible"}: ${i.amount || "Proporción no indicada"}${total === undefined ? "" : ` (${grams(total * parts[n]! / sum)})`}`),
     total === undefined ? "" : `Total de la mezcla: ${grams(total)}`, "", instructions ? `Preparación: ${instructions}` : "",
     warnings.length ? `Advertencias:\n${warnings.join("\n")}` : "Advertencias: consultar con la herboristería antes de utilizar.",
+    !partial && formatPrice(prep) ? `Precio: ${formatPrice(prep)}` : "",
     prep.avoid?.length ? `No recomendado en: ${prep.avoid.map(id => avoidOptions.find(o => o.id === id)?.label ?? id).join(", ")}` : "", "", "Ñekurel",
   ].join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 export function herbText(plant: Plant) {
-  return [plant.name, plant.scientificName, plant.properties, plant.uses.length ? `Usos tradicionales: ${plant.uses.join(", ")}` : "", `Advertencias: ${plant.warnings || "Consultar con la herboristería antes de utilizar."}`, "", "Ñekurel"].filter(Boolean).join("\n");
+  return [plant.name, plant.scientificName, plant.properties, plant.uses.length ? `Usos tradicionales: ${plant.uses.join(", ")}` : "", formatPrice(plant) ? `Precio: ${formatPrice(plant)}` : "", `Advertencias: ${plant.warnings || "Consultar con la herboristería antes de utilizar."}`, "", "Ñekurel"].filter(Boolean).join("\n");
 }
 export function whatsappUrl(number: string, text: string) {
   const raw = number.trim();

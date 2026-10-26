@@ -3,6 +3,10 @@ export type Plant = {
   uses: string[]; aliases: string[]; warnings: string; notes: string; published: boolean;
   image?: string;
   categoryIds?: string[];
+  /** Sale price in pesos. Optional: items without one show no price. */
+  price?: number;
+  /** What the price covers, e.g. "100 g" or "bolsita". */
+  priceUnit?: string;
 };
 export type Preparation = {
   id: string; name: string; uses: string[]; aliases: string[];
@@ -12,12 +16,20 @@ export type Preparation = {
   categoryIds?: string[];
   /** Situations in which this tonic is not recommended (see avoidOptions). */
   avoid?: string[];
+  price?: number;
+  priceUnit?: string;
 };
 export const categoryOptions = [
   { id: "mate", label: "Mate", query: "mate", kind: "herbs", position: "0%" },
   { id: "herbs", label: "Hierbas", query: "", kind: "herbs", position: "100%" },
   { id: "tonics", label: "Tónicos", query: "", kind: "tonics", position: "50%" },
 ] as const;
+/** "$ 1.500 / 100 g", or "" when the item has no price. */
+export function formatPrice(item: { price?: number; priceUnit?: string }): string {
+  if (typeof item.price !== "number") return "";
+  const amount = item.price.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: item.price % 1 ? 2 : 0 });
+  return item.priceUnit?.trim() ? `${amount} / ${item.priceUnit.trim()}` : amount;
+}
 export type Category = { id: string; label: string };
 export type CategoryImages = Record<string, string>;
 export const getCategories = (catalog: Catalog | null): Category[] => catalog?.categories ?? categoryOptions.map(({ id, label }) => ({ id, label }));
@@ -133,6 +145,8 @@ export function validateCatalog(value: unknown): asserts value is Catalog {
     if (!item || typeof item !== "object") fail("Ficha inválida.");
     string(item.id, true); string(item.name, true); string(item.warnings); string(item.notes); tags(item.uses); tags(item.aliases);
     if (item.image !== undefined && (typeof item.image !== "string" || (item.image !== "" && !/^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(item.image)))) fail("Imagen inválida. Subí una imagen desde el editor.");
+    if (item.price !== undefined && (typeof item.price !== "number" || !Number.isFinite(item.price) || item.price < 0 || item.price > 100_000_000)) fail("El precio debe ser un número mayor o igual a 0.");
+    if (item.priceUnit !== undefined && (typeof item.priceUnit !== "string" || item.priceUnit.length > 50)) fail("La unidad del precio es demasiado larga.");
     if (typeof item.published !== "boolean" || ids.has(item.id)) fail("Ficha inválida o identificador duplicado.");
     if (item.categoryIds !== undefined && (!Array.isArray(item.categoryIds) || item.categoryIds.length > 50 || item.categoryIds.some(id => typeof id !== "string" || !categoryIds.has(id)) || new Set(item.categoryIds).size !== item.categoryIds.length)) fail("Categorías de la ficha inválidas.");
     ids.add(item.id);
@@ -147,6 +161,5 @@ export function validateCatalog(value: unknown): asserts value is Catalog {
       if (!ingredient || !data.plants.some(p => p.id === ingredient.plantId) || seen.has(ingredient.plantId)) fail("El preparado contiene plantas inválidas o repetidas.");
       seen.add(ingredient.plantId); string(ingredient.amount);
     }
-    if (prep.published && (!prep.instructions.trim() || !prep.uses.length || prep.ingredients.some(i => !i.amount.trim()))) fail("Completá usos, preparación y proporciones del tónico.");
   }
 }

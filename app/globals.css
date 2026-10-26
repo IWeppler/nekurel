@@ -717,6 +717,13 @@ main {
 .alert.success {
   background: var(--accent-soft);
   border: 1.5px solid var(--accent);
+  font-weight: 700;
+}
+.price-tag {
+  display: inline-block;
+  margin-top: 4px;
+  font-weight: 700;
+  color: var(--accent);
 }
 .alert button {
   font-weight: 700;
@@ -884,9 +891,16 @@ main {
 .field > span {
   font-weight: 700;
 }
-.required {
+.required-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
+  font-size: 13px;
+  font-weight: 700;
 }
+
 .field small {
   font-size: 15px;
   color: var(--muted);

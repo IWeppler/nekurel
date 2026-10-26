@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { seedCatalog, searchCatalog, validateCatalog, relevance } from '../lib/catalog.ts';
 import { exportTonics, importTonics } from '../lib/csv.ts';
+import { formatPrice } from '../lib/catalog.ts';
+import { recipeText } from '../lib/recipe.ts';
 
 function activeCatalog() {
   const catalog = structuredClone(seedCatalog);
@@ -36,13 +38,11 @@ test('las hierbas nuevas, sin usos ni advertencias, no bloquean un tónico', () 
   validateCatalog(catalog);
   assert.ok(searchCatalog(catalog, 'hinchazon').preparations[0].ingredients.some(i => i.plantId === 'plant-nueva'));
 });
-test('impide referencias rotas, plantas repetidas y preparación incompleta', () => {
+test('impide referencias rotas y plantas repetidas', () => {
   const missing = activeCatalog(); missing.plants.shift();
   assert.throws(() => validateCatalog(missing), /inválidas/);
   const duplicate = activeCatalog(); duplicate.preparations[0].ingredients.push(duplicate.preparations[0].ingredients[0]);
   assert.throws(() => validateCatalog(duplicate), /repetidas/);
-  const incomplete = activeCatalog(); incomplete.preparations[0].instructions = '';
-  assert.throws(() => validateCatalog(incomplete), /completá/i);
 });
 test('buscar por el nombre de una hierba encuentra los tónicos que la llevan', () => {
   const names = searchCatalog(seedCatalog, 'manzanilla').preparations.map(p => p.name);
@@ -73,3 +73,38 @@ test('importar crea tónicos y hierbas nuevas, y deja en borrador los incompleto
   validateCatalog(report.catalog);
 });
 
+test('un tónico habilitado solo necesita nombre y una hierba', () => {
+  const catalog = activeCatalog();
+  Object.assign(catalog.preparations[0], { instructions: '', uses: [], ingredients: [{ plantId: 'plant-1', amount: '' }] });
+  validateCatalog(catalog);
+});
+test('el precio es opcional, se valida y se formatea en pesos', () => {
+  const catalog = activeCatalog();
+  validateCatalog(catalog);
+  assert.equal(formatPrice(catalog.preparations[0]), '');
+  catalog.preparations[0].price = 2500; catalog.preparations[0].priceUnit = '100 g';
+  catalog.plants[0].price = 0;
+  validateCatalog(catalog);
+  assert.match(formatPrice(catalog.preparations[0]), /2\.500 \/ 100 g$/);
+  for (const bad of [-1, Number.NaN, '10']) { catalog.plants[0].price = bad; assert.throws(() => validateCatalog(catalog), /precio/i); }
+  catalog.plants[0].price = 1; catalog.plants[0].priceUnit = 'x'.repeat(51);
+  assert.throws(() => validateCatalog(catalog), /unidad/i);
+});
+test('el CSV conserva el precio y un CSV sin esa columna no lo borra', () => {
+  const catalog = structuredClone(seedCatalog);
+  catalog.preparations[0].price = 1800.5; catalog.preparations[0].priceUnit = 'bolsita';
+  const back = importTonics(structuredClone(catalog), exportTonics(catalog));
+  assert.deepEqual(back.errors, []);
+  assert.equal(back.catalog.preparations[0].price, 1800.5);
+  assert.equal(back.catalog.preparations[0].priceUnit, 'bolsita');
+  const old = 'Nombre;Hierbas\r\nTónico digestivo;Manzanilla:2 partes\r\n';
+  assert.equal(importTonics(catalog, old).catalog.preparations[0].price, 1800.5);
+  assert.equal(importTonics(catalog, 'Nombre;Hierbas;Precio\r\nTónico digestivo;Manzanilla:2 partes;abc\r\n').errors.length, 1);
+});
+test('el mensaje para compartir incluye el precio solo si existe', () => {
+  const catalog = structuredClone(seedCatalog); const prep = catalog.preparations[0];
+  const options = { selected: prep.ingredients.map(i => i.plantId) };
+  assert.ok(!recipeText(prep, catalog, options).includes('Precio'));
+  prep.price = 3000;
+  assert.match(recipeText(prep, catalog, options), /Precio: .*3\.000/);
+});

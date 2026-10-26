@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Calculator, Check, Copy, Printer, WarningCircle } from "@phosphor-icons/react";
 import { Screen } from "./screen";
-import { avoidOptions, type Catalog, type Plant, type Preparation } from "@/lib/catalog";
+import { avoidOptions, formatPrice, type Catalog, type Plant, type Preparation } from "@/lib/catalog";
 import { CatalogImage } from "./catalog-image";
 import { WhatsAppShare } from "./whatsapp-share";
 import { partsOf, grams, recipeText, herbText } from "@/lib/recipe";
@@ -36,6 +36,7 @@ export function TonicDetail({ prep, catalog, plantName, preview, profile, onClos
 
   return <Screen title={prep.name} onClose={onClose} inline={inline}>
     <CatalogImage image={prep.image} name={prep.name} className="detail-image" />
+    {formatPrice(prep) && <p className="price-tag detail-price">{formatPrice(prep)}</p>}
     {preview && <p className="preview-note no-print">Vista previa del administrador. Revisá esta ficha antes de habilitarla.</p>}
     <section className="warning-panel" aria-labelledby="warn-title">
       <h3 id="warn-title"><WarningCircle size={30} weight="fill" aria-hidden="true" />Advertencias</h3>
@@ -82,6 +83,6 @@ export function TonicDetail({ prep, catalog, plantName, preview, profile, onClos
 }
 
 export function HerbDetail({ plant, onClose, onEdit, inline = false }: { plant: Plant; inline?: boolean; onClose: () => void; onEdit?: () => void }) {
-  return <Screen title={plant.name} onClose={onClose} inline={inline}><CatalogImage image={plant.image} name={plant.name} className="detail-image" />{plant.scientificName && <p className="section-note"><em>{plant.scientificName}</em></p>}<section className="warning-panel"><h3><WarningCircle size={30} weight="fill" aria-hidden="true" />Advertencias</h3><p>{plant.warnings || "No hay advertencias cargadas. Confirmá con el dueño antes de orientar al cliente."}</p></section><section><h3>Propiedades</h3><p className="prose">{plant.properties || "Sin propiedades cargadas."}</p></section><section><h3>Usos tradicionales y formas de uso</h3>{plant.uses.length ? <ul className="use-list">{plant.uses.map(use => <li key={use}>{use}</li>)}</ul> : <p>Sin usos cargados.</p>}</section>{plant.notes && <section className="no-print"><h3>Notas internas</h3><p className="prose">{plant.notes}</p></section>}<WhatsAppShare message={herbText(plant)} /><div className="detail-actions no-print"><button className="button" onClick={() => window.print()}><Printer size={20} aria-hidden="true" />Imprimir</button>{onEdit && <button className="button" onClick={onEdit}>Editar hierba</button>}</div></Screen>;
+  return <Screen title={plant.name} onClose={onClose} inline={inline}><CatalogImage image={plant.image} name={plant.name} className="detail-image" />{formatPrice(plant) && <p className="price-tag detail-price">{formatPrice(plant)}</p>}{plant.scientificName && <p className="section-note"><em>{plant.scientificName}</em></p>}<section className="warning-panel"><h3><WarningCircle size={30} weight="fill" aria-hidden="true" />Advertencias</h3><p>{plant.warnings || "No hay advertencias cargadas. Confirmá con el dueño antes de orientar al cliente."}</p></section><section><h3>Propiedades</h3><p className="prose">{plant.properties || "Sin propiedades cargadas."}</p></section><section><h3>Usos tradicionales y formas de uso</h3>{plant.uses.length ? <ul className="use-list">{plant.uses.map(use => <li key={use}>{use}</li>)}</ul> : <p>Sin usos cargados.</p>}</section>{plant.notes && <section className="no-print"><h3>Notas internas</h3><p className="prose">{plant.notes}</p></section>}<WhatsAppShare message={herbText(plant)} /><div className="detail-actions no-print"><button className="button" onClick={() => window.print()}><Printer size={20} aria-hidden="true" />Imprimir</button>{onEdit && <button className="button" onClick={onEdit}>Editar hierba</button>}</div></Screen>;
 }
 

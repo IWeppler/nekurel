@@ -15,7 +15,10 @@ export function AutoSaveForm({
   changes,
   registerRef,
   paused,
+  error,
 }: {
+  /** Last save error, shown next to the status so it is visible without scrolling. */
+  error?: string;
   children: ReactNode;
   onSave: (form: HTMLFormElement) => Promise<boolean>;
   changes: string;
@@ -30,6 +33,8 @@ export function AutoSaveForm({
   const previous = useRef(changes);
   const pausedRef = useRef(paused);
   const generation = useRef(0);
+  const [confirmed, setConfirmed] = useState(false);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<
     "idle" | "pending" | "saving" | "saved" | "error"
   >("idle");
@@ -38,10 +43,11 @@ export function AutoSaveForm({
     pausedRef.current = paused;
   });
 
-  const flush = useCallback(async (): Promise<boolean> => {
+  const flush = useCallback(async (force = false): Promise<boolean> => {
     if (timer.current) clearTimeout(timer.current);
     if (flight.current) return flight.current;
     if (pausedRef.current) return false;
+    if (force) dirty.current = true;
     if (!dirty.current || !form.current) return true;
     const version = generation.current;
     dirty.current = false;
@@ -53,11 +59,17 @@ export function AutoSaveForm({
     flight.current = null;
     dirty.current = !success || generation.current !== version;
     setStatus(success ? (dirty.current ? "pending" : "saved") : "error");
+    if (force) {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setConfirmed(success);
+      if (success) confirmTimer.current = setTimeout(() => setConfirmed(false), 5000);
+    }
     return success;
   }, []);
   const schedule = useCallback(() => {
     dirty.current = true;
     generation.current += 1;
+    setConfirmed(false);
     setStatus("pending");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
@@ -65,7 +77,7 @@ export function AutoSaveForm({
     }, 900);
   }, [flush]);
   useEffect(() => {
-    registerRef.current = flush;
+    registerRef.current = () => flush();
     return () => {
       if (timer.current) clearTimeout(timer.current);
       registerRef.current = async () => true;
@@ -101,7 +113,7 @@ export function AutoSaveForm({
       onChange={schedule}
       onSubmit={(event) => {
         event.preventDefault();
-        void flush();
+        void flush(true);
       }}
     >
       <p className={`autosave-status ${status}`} role="status">
@@ -115,14 +127,29 @@ export function AutoSaveForm({
                 ? "Todos los cambios guardados"
                 : "No se guardaron los cambios. Revisá el error e intentá de nuevo."}
         {status === "error" && (
-          <button type="button" onClick={() => void flush()}>
+          <button type="button" onClick={() => void flush(true)}>
             Reintentar
           </button>
         )}
       </p>
+      {confirmed && status === "saved" && (
+        <div className="alert success" role="status">
+          ✓ Se guardó correctamente.
+        </div>
+      )}
+      {status === "error" && error && (
+        <div className="alert error" role="alert">
+          {error}
+        </div>
+      )}
       <fieldset className="autosave-fields" disabled={status === "saving"}>
         {children}
       </fieldset>
+      <div className="form-actions">
+        <button className="button primary" type="submit" disabled={status === "saving" || paused}>
+          {status === "saving" ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
     </form>
   );
 }
