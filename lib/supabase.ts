@@ -2,15 +2,12 @@
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 const key = process.env.SUPABASE_SECRET_KEY;
 
-/** True when the app should persist to Supabase instead of the local data folder. */
-export const supabaseEnabled = Boolean(url && key);
-
 export class SupabaseError extends Error {
   code = "SUPABASE";
 }
 
 export async function supabase(pathname: string, init: RequestInit = {}) {
-  if (!url || !key) throw new SupabaseError("Supabase no está configurado.");
+  if (!url || !key) throw new SupabaseError("Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SECRET_KEY.");
   const headers = new Headers(init.headers);
   headers.set("apikey", key);
   headers.set("Authorization", `Bearer ${key}`);

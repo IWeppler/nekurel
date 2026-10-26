@@ -1,10 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { isAdmin, sameOrigin } from "@/lib/auth";
-import { directory } from "@/lib/store";
 import { imageFormat, imageTypes, maxImageBytes } from "@/lib/images";
-import { supabase, supabaseEnabled } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -17,15 +14,11 @@ export async function POST(request: Request) {
     const format = imageFormat(bytes);
     if (!format || file.type !== imageTypes[format]) return Response.json({ error: "La imagen debe ser JPG, PNG o WebP." }, { status: 400 });
     const name = `${randomUUID()}.${format}`;
-    if (supabaseEnabled) await supabase(`/storage/v1/object/images/${name}`, { method: "POST", headers: { "Content-Type": imageTypes[format] }, body: bytes });
-    else {
-      const folder = path.join(directory, "images");
-      await mkdir(folder, { recursive: true });
-      await writeFile(path.join(folder, name), bytes, { flag: "wx" });
-    }
+    await supabase(`/storage/v1/object/images/${name}`, { method: "POST", headers: { "Content-Type": imageTypes[format] }, body: bytes });
     return Response.json({ image: `/api/images/${name}` }, { status: 201 });
   } catch (error) {
-    const filesystemError = error instanceof Error && "code" in error;
-    return Response.json({ error: filesystemError ? "No se pudo guardar la imagen. Intentá nuevamente." : "No se pudo leer el archivo de imagen." }, { status: filesystemError ? 500 : 400 });
+    const storageError = error instanceof Error && "code" in error;
+    if (storageError) console.error(error);
+    return Response.json({ error: storageError ? "No se pudo guardar la imagen. Intentá nuevamente." : "No se pudo leer el archivo de imagen." }, { status: storageError ? 500 : 400 });
   }
 }
