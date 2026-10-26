@@ -227,7 +227,12 @@ Orden: 1, luego 2, 3 y 4 (pueden ir en paralelo), luego 5, luego 6, luego 7 y 8.
 - Correcto: las páginas de la tienda no mandan al navegador datos internos (`app/catalogo/page.tsx` mapea a `Product` sin `item`; la ficha usa `item` solo en el servidor). Las `offers` del carrito tampoco (test en `tests/store.test.mjs`).
 - Correcto: el mensaje de pedido no permite agregar líneas falsas (saltos de línea y caracteres de control del cliente se aplanan; test con prueba de mutación).
 - Correcto: el precio se calcula en un solo lugar (`effectivePrice`), en el servidor; el navegador recibe precios ya resueltos y el carrito nunca guarda precios.
-- **Pendiente, decisión de la dueña: el API público expone notas internas y recetas.** La vista del vendedor muestra "Notas internas" (`app/finder.tsx`) y entra sin contraseña, así que `GET /api/catalog?scope=public` devuelve a cualquiera las `notes` y las `instructions` (preparación del tónico). Antes era un riesgo menor (la web solo la usaba el equipo); con la tienda pública, el dominio va a circular. Opciones: (a) aceptar y documentar; (b) dar al vendedor un acceso con código simple y sacar `notes` e `instructions` del API sin sesión; (c) sacar solo `instructions`. No se cambió nada: requiere decidir cómo entra el vendedor.
+- **Resuelto (opción b): el API ya no expone notas internas ni recetas sin sesión.** Antes, `GET /api/catalog?scope=public` las devolvía a cualquiera porque el vendedor entraba sin contraseña. Ahora:
+  - El vendedor entra con un **código de vendedor** (`ANKORA_SELLER_CODE`), una vez por dispositivo; la sesión dura 30 días (cookie `nekurel-seller`, HttpOnly, SameSite=Strict, firmada con `ANKORA_SESSION_SECRET`). La firma incluye el código: **cambiar el código cierra todas las sesiones de vendedor**.
+  - `isSeller()` en `lib/auth.ts` (vendedor o administrador). `GET /api/catalog` y `GET`/`POST /api/usage` responden 401 sin sesión. `/api/session` acepta `{ code }` además de `{ password }` y comparte el límite de intentos.
+  - La tienda (`/catalogo`) no cambió: sigue siendo pública y lee en el servidor.
+  - Probado de punta a punta: sin sesión 401; código incorrecto 401; código correcto abre sesión y devuelve el catálogo con notas; una cookie de vendedor puesta como cookie de administrador no da acceso de administrador; sin cabecera `Origin` 403; cambiar el código cierra la sesión; `/catalogo` responde 200 sin sesión.
+  - **Para desplegar:** definir `ANKORA_SELLER_CODE` en Vercel **antes** de publicar. Sin esa variable, el equipo no puede entrar a la vista del vendedor (la pantalla lo explica).
 
 **Lista de chequeo para la revisión final**, a correr cuando terminen las fases 2 a 6 (puede hacerla Sonnet si no se vuelve a Opus):
 

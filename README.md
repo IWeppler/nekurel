@@ -14,7 +14,7 @@ Abrir http://localhost:3000. Para una tablet en la misma red, usar la IP de esta
 
 ## Acceso y flujo
 
-El empleado entra directamente al buscador. El dueño usa **Administrar** y la contraseña configurada en `.env.local`. No hay cuentas de empleados.
+El empleado entra al buscador con el **código de vendedor** (`ANKORA_SELLER_CODE`), que se pide una sola vez por dispositivo y dura 30 días. El dueño usa **Administrar** y la contraseña configurada en `.env.local`. No hay cuentas individuales de empleados.
 
 1. Entrar a **Tónicos**. Hay ejemplos iniciales ya habilitados; revisarlos y ajustarlos.
 2. Crear o editar un tónico: nombre, usos, sinónimos de búsqueda, hierbas con su proporción, preparación y advertencias. Las etiquetas se separan con comas.
@@ -49,6 +49,7 @@ Para una nueva instalación, copiar `.env.example` a `.env.local` y definir:
 ```dotenv
 ANKORA_ADMIN_PASSWORD=una-contraseña-propia
 ANKORA_SESSION_SECRET=un-secreto-aleatorio-de-al-menos-32-caracteres
+ANKORA_SELLER_CODE=un-codigo-para-el-equipo
 NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_...
 ```
@@ -68,7 +69,7 @@ El catálogo, el uso y las fotos se guardan en Supabase, tanto en local como en 
 
 Si todavía no hay catálogo guardado, la app muestra el catálogo inicial y lo guarda en Supabase al primer cambio. Todos los dispositivos consultan el mismo catálogo. La interfaz lo actualiza cada 30 segundos y al recuperar foco. Hay control de versión: si dos administradores editan a la vez, el segundo debe actualizar antes de guardar.
 
-La consulta es accesible a quien tenga acceso a la web, incluidas las notas internas del equipo. Eliminar una planta utilizada por una mezcla está bloqueado hasta quitarla de sus preparados.
+El catálogo del equipo (con notas internas y preparaciones) solo se entrega con el código de vendedor o la sesión de administrador. La tienda pública (`/catalogo`) no muestra notas internas ni preparaciones. Cambiar `ANKORA_SELLER_CODE` cierra todas las sesiones de vendedor (por ejemplo, si alguien deja el equipo); las de administrador siguen abiertas. Eliminar una planta utilizada por una mezcla está bloqueado hasta quitarla de sus preparados.
 
 ## Verificar
 
@@ -90,7 +91,7 @@ Las pruebas cubren sinónimos, normalización, coincidencias falsas, visibilidad
 
 ## Entrada por rol y vista del vendedor
 
-Al abrir la aplicación se elige **Vendedor** o **Administrador**. El vendedor entra sin contraseña al catálogo público; el administrador usa la sesión protegida existente y entra a Tónicos. La barra superior flotante se eliminó. El vendedor regresa a la selección con la X junto al buscador; el administrador usa Cambiar rol (cierra su sesión). Al recargar se vuelve a elegir el rol.
+Al abrir la aplicación se elige **Vendedor** o **Administrador**. El vendedor entra con el código de vendedor (una vez por dispositivo); el administrador usa la sesión protegida existente y entra a Tónicos. La barra superior flotante se eliminó. El vendedor regresa a la selección con la X junto al buscador; el administrador usa Cambiar rol (cierra su sesión). Al recargar se vuelve a elegir el rol.
 
 La vista del vendedor sigue la referencia móvil: fondo gris, búsqueda grande, categorías fotográficas (Mate, Hierbas, Tónicos), accesos rápidos y catálogo en filas. Hay filtros Todo/Tónicos/Hierbas y las situaciones del cliente se expanden al necesitarlas. Las fotos cargadas se muestran en las filas; si falta una foto se usa un icono. La foto decorativa de categorías está en `public/botanical-categories.png`, generada con la herramienta integrada de ImageGen. Las fotos del catálogo tienen prioridad cuando están disponibles. Las fichas, cantidades y WhatsApp conservan sus funciones.
 

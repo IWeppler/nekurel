@@ -207,7 +207,8 @@ export default function Home() {
   const [filter, setFilter] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [login, setLogin] = useState(false);
+  const [login, setLogin] = useState<false | "admin" | "seller">(false);
+  const [sellerAccess, setSeller] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [editor, setEditor] = useState<Preparation | null>(null);
   const [herbEditor, setHerbEditor] = useState<Plant | null>(null);
@@ -225,9 +226,21 @@ export default function Home() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const load = useCallback(async () => {
     try {
-      const session = await api<{ admin: boolean }>("/api/session").catch(
-        () => ({ admin: false }),
-      );
+      // Offline, the session cannot be checked: assume a seller and let the server (or the cached catalogue) decide.
+      const session = await api<{ admin: boolean; seller: boolean }>(
+        "/api/session",
+      ).catch(() => ({ admin: false, seller: true }));
+      setSeller(session.seller);
+      if (!role) {
+        setAdmin(session.admin);
+        return;
+      }
+      if (role === "seller" && !session.seller) {
+        setRole(null);
+        setLoginError("");
+        setLogin("seller");
+        return;
+      }
       const data = await api<Catalog>(
         role === "admin" ? "/api/catalog" : "/api/catalog?scope=public",
       );
@@ -442,17 +455,25 @@ export default function Home() {
     event.preventDefault();
     setBusy(true);
     setLoginError("");
-    const password = new FormData(event.currentTarget).get("password");
+    const secret = new FormData(event.currentTarget).get("secret");
+    const seller = login === "seller";
     try {
       await api("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(seller ? { code: secret } : { password: secret }),
       });
-      setAdmin(true);
       setCatalog(null);
-      setRole("admin");
-      setTab("tonics");
+      setPreview(false);
+      if (seller) {
+        setSeller(true);
+        setRole("seller");
+        setTab("search");
+      } else {
+        setAdmin(true);
+        setRole("admin");
+        setTab("tonics");
+      }
       setLogin(false);
     } catch (e) {
       setLoginError((e as Error).message);
@@ -835,6 +856,11 @@ export default function Home() {
               <button
                 className="role-card"
                 onClick={() => {
+                  if (!sellerAccess) {
+                    setLoginError("");
+                    setLogin("seller");
+                    return;
+                  }
                   setCatalog(null);
                   setRole("seller");
                   setTab("search");
@@ -863,7 +889,7 @@ export default function Home() {
                     setTab("tonics");
                   } else {
                     setLoginError("");
-                    setLogin(true);
+                    setLogin("admin");
                   }
                 }}
               >
@@ -1243,23 +1269,25 @@ export default function Home() {
       )}
       {login && (
         <Screen
-          title="Administración de Ñekurel"
+          key={login}
+          title={login === "seller" ? "Catálogo del equipo" : "Administración de Ñekurel"}
           onClose={() => {
             if (!busy) setLogin(false);
           }}
         >
           <p className="screen-intro">
-            Ingresá para gestionar los tónicos. El equipo puede consultar sin
-            iniciar sesión.
+            {login === "seller"
+              ? "Ingresá el código de vendedor. Se pide una sola vez en este dispositivo."
+              : "Ingresá para gestionar los tónicos."}
           </p>
           <form onSubmit={submitLogin}>
             <label className="field">
-              <span>Contraseña de administrador</span>
+              <span>{login === "seller" ? "Código de vendedor" : "Contraseña de administrador"}</span>
               <input
-                name="password"
+                name="secret"
                 type="password"
                 required
-                autoComplete="current-password"
+                autoComplete={login === "seller" ? "off" : "current-password"}
                 autoFocus
                 maxLength={512}
               />

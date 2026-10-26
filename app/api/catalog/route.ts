@@ -1,10 +1,13 @@
-import { isAdmin, sameOrigin } from "@/lib/auth";
+import { isAdmin, isSeller, sameOrigin } from "@/lib/auth";
 import { readCatalog, saveCatalog, ConflictError } from "@/lib/store";
 import { searchCatalog, validateCatalog } from "@/lib/catalog";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
+    // The seller view includes internal notes and recipes, so it needs a seller (or administrator) session.
+    // The public store does not use this endpoint: it reads the catalogue on the server (lib/shop.ts).
+    if (!await isSeller()) return Response.json({ error: "Ingresá el código de vendedor para ver el catálogo.", seller: false }, { status: 401, headers: { "Cache-Control": "no-store" } });
     const catalog = await readCatalog();
     if (new URL(request.url).searchParams.get("scope") !== "public" && await isAdmin()) return Response.json(catalog, { headers: { "Cache-Control": "no-store" } });
     const visible = searchCatalog(catalog, "");
