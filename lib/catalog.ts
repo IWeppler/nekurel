@@ -7,6 +7,15 @@ export type Plant = {
   price?: number;
   /** What the price covers, e.g. "100 g" or "bolsita". */
   priceUnit?: string;
+} & StoreFields;
+/** Online-store fields shared by herbs and tonics. They never affect the seller view. */
+type StoreFields = {
+  /** Hidden from the online store only. */
+  hidden?: boolean;
+  /** Sale price. Applies only while lower than `price` and not past `promoUntil`. */
+  promoPrice?: number;
+  /** Last day of the sale, "YYYY-MM-DD", inclusive, Argentina time. */
+  promoUntil?: string;
 };
 export type Preparation = {
   id: string; name: string; uses: string[]; aliases: string[];
@@ -18,6 +27,19 @@ export type Preparation = {
   avoid?: string[];
   price?: number;
   priceUnit?: string;
+} & StoreFields;
+/** Contact details shown on the online store. Empty strings mean "not set". */
+export type StoreSettings = {
+  /** Digits only, with country code. Orders and questions go to this number. */
+  whatsapp?: string;
+  instagram?: string; facebook?: string;
+  address?: string; mapsUrl?: string; hours?: string;
+};
+/** Several products sold together at a fixed price. Promotions never apply inside a combo. */
+export type Combo = {
+  id: string; name: string; description: string; image?: string;
+  items: { productId: string; qty: number }[];
+  price: number; active: boolean;
 };
 export const categoryOptions = [
   { id: "mate", label: "Mate", query: "mate", kind: "herbs", position: "0%" },
@@ -30,7 +52,20 @@ export function formatPrice(item: { price?: number; priceUnit?: string }): strin
   const amount = item.price.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: item.price % 1 ? 2 : 0 });
   return item.priceUnit?.trim() ? `${amount} / ${item.priceUnit.trim()}` : amount;
 }
-export type Category = { id: string; label: string };
+/** Today's date as "YYYY-MM-DD" in Argentina, the store's time zone. */
+export const storeToday = (now = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+export type EffectivePrice = { price?: number; regular?: number; onPromo: boolean; unit: string };
+/**
+ * The price a customer pays for one unit bought on its own. This is the single source of truth
+ * for the store, the cart and the order message. `today` comes from storeToday().
+ */
+export function effectivePrice(item: { price?: number; priceUnit?: string; promoPrice?: number; promoUntil?: string }, today: string): EffectivePrice {
+  const unit = item.priceUnit?.trim() ?? "";
+  if (typeof item.price !== "number") return { onPromo: false, unit };
+  const onPromo = typeof item.promoPrice === "number" && item.promoPrice < item.price && (!item.promoUntil || today <= item.promoUntil);
+  return { price: onPromo ? item.promoPrice : item.price, regular: item.price, onPromo, unit };
+}
+export type Category = { id: string; label: string; hidden?: boolean };
 export type CategoryImages = Record<string, string>;
 export const getCategories = (catalog: Catalog | null): Category[] => catalog?.categories ?? categoryOptions.map(({ id, label }) => ({ id, label }));
 export function itemCategories(item: Plant | Preparation): string[] {
@@ -38,7 +73,35 @@ export function itemCategories(item: Plant | Preparation): string[] {
   if ("ingredients" in item) return ["tonics"];
   return ["herbs", ...([...item.uses, ...item.aliases].some(term => normalize(term).includes("mate")) ? ["mate"] : [])];
 }
-export type Catalog = { plants: Plant[]; preparations: Preparation[]; revision: number; categoryImages?: CategoryImages; categories?: Category[] };
+export type Catalog = { plants: Plant[]; preparations: Preparation[]; revision: number; categoryImages?: CategoryImages; categories?: Category[]; store?: StoreSettings; combos?: Combo[] };
+
+/**
+ * The category a product is listed under in the store: its first visible category, in catalogue order.
+ * Undefined means the product is not in the store (draft, hidden, or every category hidden).
+ */
+export function storeCategory(catalog: Catalog, item: Plant | Preparation): Category | undefined {
+  if (!item.published || item.hidden) return undefined;
+  const own = itemCategories(item);
+  return getCategories(catalog).find(category => !category.hidden && own.includes(category.id));
+}
+export const isInStore = (catalog: Catalog, item: Plant | Preparation) => storeCategory(catalog, item) !== undefined;
+export const findProduct = (catalog: Catalog, id: string): Plant | Preparation | undefined => catalog.plants.find(p => p.id === id) ?? catalog.preparations.find(p => p.id === id);
+/** An active combo is shown only while every product in it is in the store. */
+export const isComboInStore = (catalog: Catalog, combo: Combo) => combo.active && combo.items.every(i => { const product = findProduct(catalog, i.productId); return product !== undefined && isInStore(catalog, product); });
+/** Active combos the public cannot see because a product was hidden. The administrator is warned about these. */
+export const brokenCombos = (catalog: Catalog) => (catalog.combos ?? []).filter(combo => combo.active && !isComboInStore(catalog, combo));
+/** Combos that include a product. A product used in a combo cannot be deleted. */
+export const combosUsing = (catalog: Catalog, productId: string) => (catalog.combos ?? []).filter(combo => combo.items.some(i => i.productId === productId));
+/** What the combo's products cost bought separately at their regular price, and the difference. Undefined if any product has no price. */
+export function comboSavings(catalog: Catalog, combo: Combo): { regular: number; savings: number } | undefined {
+  let regular = 0;
+  for (const { productId, qty } of combo.items) {
+    const price = findProduct(catalog, productId)?.price;
+    if (typeof price !== "number") return undefined;
+    regular += price * qty;
+  }
+  return { regular, savings: Math.max(0, regular - combo.price) };
+}
 
 export const avoidOptions = [
   { id: "embarazo", label: "Embarazo" },
@@ -141,6 +204,7 @@ export function validateCatalog(value: unknown): asserts value is Catalog {
     const categoryIds = new Set<string>(); const names = new Set<string>();
     for (const category of data.categories) {
       if (!category || typeof category.id !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(category.id) || typeof category.label !== "string" || !category.label.trim() || category.label.length > 100 || categoryIds.has(category.id) || names.has(normalize(category.label))) fail("Revisá las categorías: cada una debe tener un nombre distinto.");
+      if (category.hidden !== undefined && typeof category.hidden !== "boolean") fail("Categorías inválidas.");
       categoryIds.add(category.id); names.add(normalize(category.label));
     }
   }
@@ -153,14 +217,22 @@ export function validateCatalog(value: unknown): asserts value is Catalog {
   }
   if (data.plants.length > 2000 || data.preparations.length > 2000) fail("El catálogo supera el límite de este MVP.");
   const string = (v: unknown, required = false) => { if (typeof v !== "string" || v.length > 10000 || (required && !v.trim())) fail("Revisá los campos obligatorios."); };
+  const money = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100_000_000;
+  // Round-tripping through Date rejects impossible days such as 2026-02-30.
+  const isDate = (v: unknown) => { if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false; const date = new Date(`${v}T00:00:00Z`); return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(v); };
+  const imagePath = /^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
   const tags = (v: unknown) => { if (!Array.isArray(v) || v.length > 100) fail("Etiquetas inválidas."); for (const tag of v as unknown[]) string(tag, true); };
   const ids = new Set<string>();
   for (const item of [...data.plants, ...data.preparations]) {
     if (!item || typeof item !== "object") fail("Ficha inválida.");
     string(item.id, true); string(item.name, true); string(item.warnings); string(item.notes); tags(item.uses); tags(item.aliases);
     if (item.image !== undefined && (typeof item.image !== "string" || (item.image !== "" && !/^\/api\/images\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(item.image)))) fail("Imagen inválida. Subí una imagen desde el editor.");
-    if (item.price !== undefined && (typeof item.price !== "number" || !Number.isFinite(item.price) || item.price < 0 || item.price > 100_000_000)) fail("El precio debe ser un número mayor o igual a 0.");
+    if (item.price !== undefined && !money(item.price)) fail("El precio debe ser un número mayor o igual a 0.");
     if (item.priceUnit !== undefined && (typeof item.priceUnit !== "string" || item.priceUnit.length > 50)) fail("La unidad del precio es demasiado larga.");
+    // A sale price that is not lower than the price is allowed and simply ignored, so lowering prices in bulk never blocks a save.
+    if (item.promoPrice !== undefined && !money(item.promoPrice)) fail(`El precio de oferta de ${item.name} debe ser un número mayor o igual a 0.`);
+    if (item.promoUntil !== undefined && !isDate(item.promoUntil)) fail(`La fecha de fin de la oferta de ${item.name} no es válida.`);
+    if (item.hidden !== undefined && typeof item.hidden !== "boolean") fail("Ficha inválida.");
     if (typeof item.published !== "boolean" || ids.has(item.id)) fail("Ficha inválida o identificador duplicado.");
     if (item.categoryIds !== undefined && (!Array.isArray(item.categoryIds) || item.categoryIds.length > 50 || item.categoryIds.some(id => typeof id !== "string" || !categoryIds.has(id)) || new Set(item.categoryIds).size !== item.categoryIds.length)) fail("Categorías de la ficha inválidas.");
     ids.add(item.id);
@@ -174,6 +246,39 @@ export function validateCatalog(value: unknown): asserts value is Catalog {
     for (const ingredient of prep.ingredients) {
       if (!ingredient || !data.plants.some(p => p.id === ingredient.plantId) || seen.has(ingredient.plantId)) fail("El preparado contiene plantas inválidas o repetidas.");
       seen.add(ingredient.plantId); string(ingredient.amount);
+    }
+  }
+  if (data.store !== undefined) {
+    const store = data.store;
+    if (!store || typeof store !== "object" || Array.isArray(store)) fail("Datos de la tienda inválidos.");
+    const text = (v: unknown, max: number, label: string) => { if (v !== undefined && (typeof v !== "string" || v.length > max)) fail(`Revisá ${label} de la tienda.`); };
+    text(store.whatsapp, 20, "el WhatsApp"); text(store.instagram, 200, "el Instagram"); text(store.facebook, 200, "el Facebook");
+    text(store.address, 300, "la dirección"); text(store.mapsUrl, 2000, "el link del mapa"); text(store.hours, 1000, "los horarios");
+    if (store.whatsapp && !/^[1-9]\d{7,14}$/.test(store.whatsapp)) fail("El WhatsApp de la tienda debe tener solo números, con código de país y sin el 0 inicial.");
+    for (const [label, link] of [["Instagram", store.instagram], ["Facebook", store.facebook], ["El link del mapa", store.mapsUrl]] as const) {
+      if (link && (link.includes("://") || label === "El link del mapa") && !/^https:\/\/[^\s]+$/.test(link)) fail(`${label} debe ser un link que empiece con https://.`);
+    }
+  }
+  if (data.combos !== undefined) {
+    if (!Array.isArray(data.combos) || data.combos.length > 200) fail("Combos inválidos.");
+    const comboIds = new Set<string>(); const comboNames = new Set<string>();
+    for (const combo of data.combos) {
+      if (!combo || typeof combo !== "object") fail("Combo inválido.");
+      string(combo.id, true); string(combo.name, true); string(combo.description);
+      if (combo.id.length > 100 || combo.name.length > 200 || comboIds.has(combo.id)) fail("Combo inválido o identificador duplicado.");
+      if (comboNames.has(normalize(combo.name))) fail(`Hay dos combos llamados ${combo.name}.`);
+      comboIds.add(combo.id); comboNames.add(normalize(combo.name));
+      if (combo.image !== undefined && (typeof combo.image !== "string" || (combo.image !== "" && !imagePath.test(combo.image)))) fail("Imagen inválida. Subí una imagen desde el editor.");
+      if (!money(combo.price)) fail(`El precio del combo ${combo.name} debe ser un número mayor o igual a 0.`);
+      if (typeof combo.active !== "boolean") fail("Combo inválido.");
+      if (!Array.isArray(combo.items) || !combo.items.length || combo.items.length > 20) fail(`El combo ${combo.name} debe tener entre 1 y 20 productos.`);
+      const products = new Set<string>();
+      for (const line of combo.items) {
+        if (!line || typeof line.productId !== "string" || !ids.has(line.productId)) fail(`El combo ${combo.name} usa un producto que ya no existe.`);
+        if (products.has(line.productId)) fail(`El combo ${combo.name} repite un producto.`);
+        if (!Number.isInteger(line.qty) || line.qty < 1 || line.qty > 99) fail(`Las cantidades del combo ${combo.name} deben ser números enteros entre 1 y 99.`);
+        products.add(line.productId);
+      }
     }
   }
 }

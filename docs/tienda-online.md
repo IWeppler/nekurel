@@ -56,7 +56,7 @@ Implementado y **sin commitear** al escribir este documento (revisar `git status
 
 - Todo el catálogo es **un solo documento JSON** en Supabase (`app_data`, clave `catalog`). Tipos y validación en `lib/catalog.ts` (`Plant`, `Preparation`, `Catalog`, `validateCatalog`). Agregar campos **opcionales** no rompe catálogos ya guardados y no requiere migración SQL.
 - Guardado con control de versión: `lib/store.ts` (`saveCatalog`, `ConflictError`) y `app/api/catalog/route.ts` (PUT solo para administrador y mismo origen).
-- Lectura pública: `GET /api/catalog?scope=public` devuelve solo lo publicado. **Cualquier dato nuevo de la tienda que deba ser público tiene que agregarse ahí y nunca debe exponer lo oculto** (ver fase 4 y fase 7).
+- Lectura pública: `GET /api/catalog?scope=public` devuelve solo lo publicado y es lo que lee la **vista del vendedor**. Lo oculto en la tienda **sí** viaja ahí, con su marca `hidden` (ver el registro de la fase 1). Las páginas de la tienda no usan este API: leen en el servidor con `lib/shop.ts`.
 - Administrador: `app/page.tsx` (cliente, ~1300 líneas), pestañas `search | tonics | herbs`. Formularios con autoguardado: `app/auto-save-form.tsx`. Campo de precio: `PriceFields` en `app/page.tsx`.
 - Categorías: `getCategories`, `itemCategories` en `lib/catalog.ts`. Cada producto se muestra bajo la primera categoría que lo incluye.
 - Estilos: `app/globals.css`, una sola hoja. Radios: pastillas para controles, `--radius-card` para tarjetas. Un solo acento verde. Sin modo oscuro.
@@ -93,7 +93,7 @@ type Combo = {
 Reglas:
 
 - **Precio vigente** (una sola función en `lib/`, usada por tienda, carrito y mensaje): devuelve `{ price, regular, onPromo, unit }`. La promo aplica solo si hay `price`, `promoPrice < price` y (`promoUntil` vacío o hoy ≤ `promoUntil`).
-- Un producto oculto, o en una categoría oculta, no aparece en la tienda, ni en su ficha por link (404), ni en el carrito, ni en `GET /api/catalog?scope=public`.
+- Un producto oculto, o en una categoría oculta, no aparece en la tienda, ni en su ficha por link (404), ni en el carrito. Sigue viajando en `GET /api/catalog?scope=public` porque lo usa el vendedor (ver registro de la fase 1).
 - Un combo activo cuyo producto está oculto o fue borrado **no se muestra** (y la administración debe avisar cuál combo quedó roto).
 - El ahorro de un combo se calcula contra la suma de precios regulares por cantidad, solo si todos los productos tienen precio.
 - Borrar una hierba usada en un combo debe estar bloqueado, igual que hoy con los tónicos.
@@ -137,7 +137,7 @@ Orden: 1, luego 2, 3 y 4 (pueden ir en paralelo), luego 5, luego 6, luego 7 y 8.
   1. Agregar los tipos y campos de la sección 4 en `lib/catalog.ts`.
   2. Extender `validateCatalog`: formato de `whatsapp`, URLs `https`, `promoPrice` numérico válido, `promoUntil` con formato de fecha, combos (ids existentes, cantidades enteras, precio válido, nombres únicos, límites de tamaño).
   3. Crear la función de precio vigente y la del ahorro de un combo, puras y testeadas (con la fecha como parámetro para poder testear).
-  4. Crear el helper que decide si un producto es **visible en la tienda** (oculto propio o por categoría) y usarlo en `lib/shop.ts` y en `GET /api/catalog?scope=public`.
+  4. Crear el helper que decide si un producto es **visible en la tienda** (oculto propio o por categoría) y usarlo en `lib/shop.ts`. (Hecho: el API público no filtra, ver registro.)
   5. Bloquear borrar una hierba usada en un combo (regla en el administrador, apoyada en una función de `lib/`).
   6. Tests en `tests/catalog.test.mjs`.
 - **No hacer:** interfaces de administrador ni cambios visuales en la tienda.
@@ -171,9 +171,9 @@ Orden: 1, luego 2, 3 y 4 (pueden ir en paralelo), luego 5, luego 6, luego 7 y 8.
 - **Alcance:**
   1. Interruptor "Visible en la tienda" en los formularios de tónico y hierba, y en el editor de categorías.
   2. Sección **Visibilidad** en Tienda: lista de lo oculto con opción de mostrar de nuevo.
-  3. Aplicar la visibilidad usando el helper de la fase 1 en `/catalogo`, en `/catalogo/[slug]` (404 si está oculto) y en el API público.
+  3. Aplicar la visibilidad usando el helper de la fase 1 en `/catalogo`, en `/catalogo/[slug]` (404 si está oculto). Esto ya funciona desde la fase 1; falta la interfaz. El API público no se filtra.
   4. La vista del vendedor (app interna) **no cambia**: sigue viendo todo.
-- **Criterios de aceptación:** un producto oculto da 404 en su link, no aparece en el listado ni en el API público; ocultar una categoría oculta todos sus productos sin tocar sus fichas.
+- **Criterios de aceptación:** un producto oculto da 404 en su link, no aparece en el listado de la tienda pero el vendedor lo sigue viendo; ocultar una categoría oculta todos sus productos sin tocar sus fichas.
 
 ### Fase 5. Promociones y combos. **Opus 5.5 (modelo) y Sonnet 5.5 (interfaz)**
 
@@ -213,7 +213,7 @@ Actualizar esta tabla al terminar cada fase.
 | Fase | Modelo | Estado |
 |---|---|---|
 | 0. Commitear catálogo en grilla, fichas por slug e ícono de WhatsApp | Haiku 5.5 | Hecho (Opus 5.5) |
-| 1. Modelo de datos y precio vigente | Opus 5.5 | Pendiente |
+| 1. Modelo de datos y precio vigente | Opus 5.5 | Hecho |
 | 2. Pestaña Tienda: datos de contacto | Sonnet 5.5 | Pendiente |
 | 3. Edición masiva de precios | Sonnet 5.5 | Pendiente |
 | 4. Ocultar productos y categorías | Sonnet 5.5 | Pendiente |
@@ -227,3 +227,15 @@ Actualizar esta tabla al terminar cada fase.
 (Cada fase agrega acá lo que cambió respecto del plan, con fecha y motivo.)
 
 - 2026-10-26: plan inicial redactado. Pedidos solo por WhatsApp, sin stock (próximo paso), promo y combo no se combinan.
+- 2026-10-26, fase 1 (Opus 5.5). Qué quedó en `lib/catalog.ts` y cómo usarlo en las fases siguientes:
+  - **Tipos:** `StoreSettings`, `Combo`; campos `hidden`, `promoPrice`, `promoUntil` en tónicos y hierbas (tipo `StoreFields`); `hidden` en `Category`; `store` y `combos` en `Catalog`. Todo opcional; los catálogos guardados siguen validando.
+  - **Precio:** `effectivePrice(item, storeToday())` es la única fuente de verdad. Devuelve `{ price, regular, onPromo, unit }`. `storeToday()` da la fecha en hora de Argentina; pasarla como parámetro permite testear. **No calcular precios a mano en ningún otro lado.**
+  - **Visibilidad:** `storeCategory(catalog, item)` devuelve la categoría donde se lista el producto en la tienda (primera categoría visible) o `undefined` si no está en la tienda (borrador, oculto, o todas sus categorías ocultas). `isInStore` es el atajo booleano. `lib/shop.ts` ya lo usa, así que `/catalogo` y `/catalogo/[slug]` ya respetan `hidden` (la ficha oculta da 404).
+  - **Combos:** `isComboInStore`, `brokenCombos` (activos con un producto fuera de la tienda, para avisar en el administrador), `combosUsing` (bloquea borrar), `comboSavings` (contra precios regulares, nunca contra ofertas; `undefined` si falta algún precio; nunca negativo), `findProduct`.
+  - **Cambio de plan: el API público NO filtra lo oculto.** `GET /api/catalog?scope=public` es lo que usa la vista del vendedor (`app/page.tsx`), que no se usa con contraseña. Si filtrara lo oculto, el vendedor dejaría de verlo, contra la regla de la fase 4. Se decidió que "oculto" es una decisión comercial, no un secreto: el API lo sigue devolviendo con su marca `hidden`, y las páginas de la tienda filtran en el servidor con `storeCategory`. Las fases 4 y 7 deben tomar esto como dado.
+  - **Cambio de plan: un combo nunca apunta a un producto borrado.** La validación rechaza combos con productos inexistentes, y el administrador bloquea borrar un producto usado en un combo (tónicos y hierbas, no solo hierbas). Por eso "combo roto" solo puede deberse a un producto oculto o en borrador.
+  - **Ofertas tolerantes:** una oferta mayor o igual al precio, o sin precio, se guarda igual y simplemente no aplica. Así una baja masiva de precios (fase 3) nunca bloquea el guardado. La fase 5 debe avisarlo en el formulario.
+  - **Datos de la tienda:** `whatsapp` solo dígitos (8 a 15, sin 0 inicial); Instagram y Facebook aceptan usuario (`@nekurel`) o link `https://`; `mapsUrl` debe ser `https://`. Strings vacíos significan "sin cargar". Normalizar el usuario a link es trabajo de la fase 2.
+  - **Slugs estables:** se asignan sobre todos los productos publicados, no solo los visibles, para que ocultar uno no cambie el link de otro.
+  - **CSV:** reimportar tónicos conserva `hidden`, `promoPrice` y `promoUntil`, que no viajan en el CSV.
+  - Tests: 11 nuevos en `tests/catalog.test.mjs` (sección "Online store").

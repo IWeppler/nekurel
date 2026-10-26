@@ -107,6 +107,8 @@ export function importTonics(catalog: Catalog, text: string): ImportReport {
     if (price !== undefined && (!Number.isFinite(price) || price < 0)) { report.errors.push(`Fila ${line} (${name}): el precio no es un número válido.`); return; }
     const priceUnit = columns.includes("priceUnit") ? get("priceUnit") || undefined : existing?.priceUnit;
     const item: Preparation = {
+      // Store fields are not in the CSV, so a re-import keeps them.
+      ...(existing ? { hidden: existing.hidden, promoPrice: existing.promoPrice, promoUntil: existing.promoUntil } : {}),
       id: existing?.id ?? crypto.randomUUID(), categoryIds: existing?.categoryIds, name, uses: list(get("uses"), true), aliases: list(get("aliases"), true), ingredients,
       instructions: get("instructions"), warnings: get("warnings"), notes: get("notes"), avoid: parseAvoid(get("avoid")), published: false,
       ...(image !== undefined ? { image } : {}),

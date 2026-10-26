@@ -34,6 +34,7 @@ import { AutoSaveForm } from "./auto-save-form";
 import {
   getAvoidOptions,
   getCategories,
+  combosUsing,
   formatPrice,
   normalize,
   searchCatalog,
@@ -776,6 +777,13 @@ export default function Home() {
             ) {
               setFormError(
                 "Esta hierba se utiliza en un tónico. Quitala de sus ingredientes antes de eliminarla.",
+              );
+              return;
+            }
+            const combos = combosUsing(catalog, deleting.id);
+            if (combos.length) {
+              setFormError(
+                `Esta ficha forma parte de ${combos.length === 1 ? "el combo" : "los combos"} ${combos.map((c) => c.name).join(", ")}. Quitala del combo antes de eliminarla.`,
               );
               return;
             }

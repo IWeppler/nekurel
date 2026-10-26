@@ -1,4 +1,4 @@
-import { assignSlugs, formatPrice, getCategories, itemCategories, searchCatalog, type Catalog, type Plant, type Preparation } from "./catalog.ts";
+import { assignSlugs, formatPrice, storeCategory, type Catalog, type Plant, type Preparation } from "./catalog.ts";
 import { readCatalog } from "./store.ts";
 
 export type ShopItem = {
@@ -9,17 +9,16 @@ export type ShopItem = {
   item: Plant | Preparation;
 };
 
-/** Everything the public catalogue shows: published items only, each under its first matching category. */
+/** Everything the public catalogue shows: products in the store (see storeCategory), each under its first visible category. */
 export async function loadShop(): Promise<{ catalog: Catalog; items: ShopItem[] }> {
   const catalog = await readCatalog();
-  const visible = searchCatalog(catalog, "");
-  const all: (Plant | Preparation)[] = [...visible.preparations, ...visible.plants.filter(p => p.published)];
-  const slugs = assignSlugs(all.map(item => ({ id: item.id, name: item.name, tonic: "ingredients" in item })));
-  const categories = getCategories(catalog);
+  const published: (Plant | Preparation)[] = [...catalog.preparations, ...catalog.plants].filter(item => item.published);
+  // Slugs come from every published product, not only the visible ones, so hiding one product never changes another's link.
+  const slugs = assignSlugs(published.map(item => ({ id: item.id, name: item.name, tonic: "ingredients" in item })));
   const herb = (id: string) => catalog.plants.find(p => p.id === id)?.name ?? "";
   const items: ShopItem[] = [];
-  for (const item of all) {
-    const category = categories.find(c => itemCategories(item).includes(c.id));
+  for (const item of published) {
+    const category = storeCategory(catalog, item);
     if (!category) continue;
     const tonic = "ingredients" in item;
     items.push({
