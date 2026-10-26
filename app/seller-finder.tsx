@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, CaretDown, Check, Funnel, Leaf, MagnifyingGlass, WarningCircle, X } from "@phosphor-icons/react";
 import { CatalogImage } from "./catalog-image";
 import { avoidOptions, formatPrice, getAvoidOptions, categoryOptions, getCategories, itemCategories, type Catalog, type Plant, type Preparation } from "@/lib/catalog";
@@ -33,7 +34,7 @@ export function Finder({ catalog, query, onQuery, results, herbs, onOpenHerb, is
   const updateQuery = (value: string) => { onQuery(value); setSelectedCategory(""); };
   const toggleProfile = (id: string) => onProfile(profile.includes(id) ? profile.filter(p => p !== id) : [...profile, id]);
   return <section className="seller-finder">
-    <div className="seller-return"><button aria-label="Volver a seleccionar rol" onClick={onExit}><ArrowLeft size={22} aria-hidden="true" />Volver</button></div>
+    <div className="seller-return"><button aria-label="Volver a seleccionar rol" onClick={onExit}><ArrowLeft size={22} aria-hidden="true" />Volver</button><Link href="/catalogo">Catálogo con precios</Link></div>
     <div className="seller-search"><MagnifyingGlass size={37} weight="regular" aria-hidden="true" /><input type="search" aria-label="Buscar hierbas, tónicos o usos" placeholder="Buscar" value={query} onChange={e => updateQuery(e.target.value)} inputMode="search" enterKeyHint="search" autoComplete="off" spellCheck={false} />{query && <button className="search-reset" aria-label="Borrar búsqueda" onClick={() => updateQuery("")}><X size={24} aria-hidden="true" /></button>}</div>
 
     {!searching && <section className="seller-section"><h2>Categorías</h2><div className="category-strip">{categories.map(category => {

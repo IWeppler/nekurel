@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { seedCatalog, searchCatalog, validateCatalog, relevance } from '../lib/catalog.ts';
 import { exportTonics, importTonics } from '../lib/csv.ts';
-import { formatPrice } from '../lib/catalog.ts';
+import { formatPrice, slugify, assignSlugs } from '../lib/catalog.ts';
 import { recipeText } from '../lib/recipe.ts';
 
 function activeCatalog() {
@@ -107,4 +107,17 @@ test('el mensaje para compartir incluye el precio solo si existe', () => {
   assert.ok(!recipeText(prep, catalog, options).includes('Precio'));
   prep.price = 3000;
   assert.match(recipeText(prep, catalog, options), /Precio: .*3\.000/);
+});
+test('los slugs salen del nombre y no se repiten', () => {
+  assert.equal(slugify('Té de Menta, Ñandú!'), 'te-de-menta-nandu');
+  assert.equal(slugify('???'), 'producto');
+  const slugs = assignSlugs([
+    { id: 'a', name: 'Menta', tonic: false }, { id: 'b', name: 'menta', tonic: true },
+    { id: 'c', name: 'Boldo', tonic: false }, { id: 'plant-9', name: 'Tilo', tonic: false }, { id: 'plant-8', name: 'Tilo', tonic: false },
+  ]);
+  assert.equal(slugs.get('a'), 'menta-hierba');
+  assert.equal(slugs.get('b'), 'menta-tonico');
+  assert.equal(slugs.get('c'), 'boldo');
+  assert.notEqual(slugs.get('plant-9'), slugs.get('plant-8'));
+  assert.equal(new Set(slugs.values()).size, 5);
 });

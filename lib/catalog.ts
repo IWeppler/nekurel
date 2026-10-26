@@ -56,6 +56,20 @@ export function getAvoidOptions(catalog: Catalog | null): { id: string; label: s
 export type AvoidId = (typeof avoidOptions)[number]["id"];
 
 export const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+/** URL-safe version of a name: "Té de Menta" becomes "te-de-menta". */
+export const slugify = (value: string) => normalize(value).replace(/ /g, "-") || "producto";
+/**
+ * One slug per item, taken from its name. Items that share a name get the kind appended
+ * ("menta-hierba", "menta-tonico"), and an id fragment if that still collides.
+ */
+export function assignSlugs(items: { id: string; name: string; tonic: boolean }[]): Map<string, string> {
+  const base = new Map<string, number>();
+  for (const item of items) base.set(slugify(item.name), (base.get(slugify(item.name)) ?? 0) + 1);
+  const kinded = items.map(item => ({ item, slug: base.get(slugify(item.name))! > 1 ? `${slugify(item.name)}-${item.tonic ? "tonico" : "hierba"}` : slugify(item.name) }));
+  const seen = new Map<string, number>();
+  for (const { slug } of kinded) seen.set(slug, (seen.get(slug) ?? 0) + 1);
+  return new Map(kinded.map(({ item, slug }) => [item.id, seen.get(slug)! > 1 ? `${slug}-${item.id.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 6)}` : slug]));
+}
 const stopWords = new Set(["de", "del", "la", "el", "los", "las", "para", "por", "un", "una", "y", "con", "me", "tengo"]);
 export function relevance(item: { name: string; uses: string[]; aliases: string[] }, query: string, extra: string[] = []) {
   const q = normalize(query);
