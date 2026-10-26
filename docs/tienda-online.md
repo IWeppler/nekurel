@@ -61,7 +61,7 @@ Implementado y **sin commitear** al escribir este documento (revisar `git status
 - Categorías: `getCategories`, `itemCategories` en `lib/catalog.ts`. Cada producto se muestra bajo la primera categoría que lo incluye.
 - Estilos: `app/globals.css`, una sola hoja. Radios: pastillas para controles, `--radius-card` para tarjetas. Un solo acento verde. Sin modo oscuro.
 - Código: estilo denso de una línea por sentencia, comentarios solo cuando explican el porqué, textos de interfaz en español rioplatense, sin guiones largos en textos visibles.
-- Tests: `node --experimental-strip-types --test tests/catalog.test.mjs tests/features.test.mjs`. Verificar también `npx tsc --noEmit` y `npx eslint app lib`.
+- Tests: `node --experimental-strip-types --test tests/catalog.test.mjs tests/features.test.mjs tests/store.test.mjs`. Los módulos que importan los tests deben importar con extensión `.ts` (por eso `lib/shop.ts` carga `store.ts` con un import dinámico). Verificar también `npx tsc --noEmit` y `npx eslint app lib`.
 - Service worker `public/sw.js`: subir `VERSION` cuando cambie algo que deba llegar a dispositivos con la app instalada.
 
 ## 4. Modelo de datos propuesto (lo define la fase 1)
@@ -181,26 +181,66 @@ Orden: 1, luego 2, 3 y 4 (pueden ir en paralelo), luego 5, luego 6, luego 7 y 8.
 
 - **Objetivo:** ofertas por producto y combos con precio fijo, visibles en la tienda.
 - **Alcance:**
-  1. Opus: revisar que la función de precio de la fase 1 cubra promos, definir cómo se muestra el ahorro y la regla "promo y combo no se combinan", y dejar los tests.
+  1. ~~Opus: revisar la función de precio, definir cómo se muestra el ahorro, la regla "promo y combo no se combinan" y los tests.~~ **Hecho.** Ver "Guía para Sonnet: fase 5" abajo.
   2. Sonnet: campo de **precio de oferta** y **válida hasta** en los formularios; sección **Promociones y combos** en Tienda para crear, editar, activar y desactivar combos (nombre, foto, descripción, productos con cantidad, precio).
-  3. Sonnet: en la tienda, precio tachado y precio de oferta, etiqueta de oferta, y una sección **Combos** con tarjetas propias (y ficha `/catalogo/combo/<slug>` o equivalente decidida por Opus; los slugs no deben chocar con los de productos).
-  4. Aviso en administración si un combo quedó roto (producto oculto o borrado).
+  3. Sonnet: en la tienda, precio tachado y precio de oferta, etiqueta de oferta, una sección **Combos** con tarjetas propias, y la ficha del combo en **`/catalogo/combos/[slug]`** (ruta decidida; el slug `combos` está reservado y ningún producto puede tomarlo).
+  4. Aviso en administración si un combo quedó roto: `brokenCombos(catalog)` (por diseño, un combo solo puede romperse por un producto oculto o en borrador; borrar está bloqueado).
+
+**Guía para Sonnet: fase 5 (todo listo en `lib/`, solo falta interfaz)**
+
+- `loadShop()` (`lib/shop.ts`) devuelve `{ catalog, items, combos, offers, store }`. Todos los precios ya vienen resueltos para hoy con `effectivePrice`. **No calcular precios en la interfaz.**
+- Cada `ShopItem` trae `price` (el que se cobra, con unidad: ya es el de oferta si hay promo, o `""` si es "Consultar"), `regularPrice` (solo durante la promo, para mostrar tachado) y `pricing.onPromo` (para la etiqueta "Oferta"). `/catalogo` y `/catalogo/[slug]` ya muestran el precio de oferta como precio; falta mostrar el tachado y la etiqueta.
+- Cada `ShopCombo` trae `key`, `slug`, `name`, `description`, `image`, `price`, `priceValue`, `items` (nombre, cantidad y `slug` para enlazar cada producto), y `regularPrice` y `savings` **solo** si todos los productos tienen precio y el combo es más barato. Mostrar "Ahorrás {savings}" solo cuando exista. Solo llegan combos activos y con todos sus productos visibles.
+- En el formulario de la oferta, avisar si `promoPrice >= price` o si no hay precio: se guarda igual pero no se aplica (decisión de la fase 1).
+- Formatear montos con `formatMoney` de `lib/catalog.ts`.
+- Nunca pasar `ShopItem.item` ni `catalog` a un componente cliente: tienen notas internas. Mapear a los campos que se muestran, como ya hace `app/catalogo/page.tsx`.
+- Tests de referencia: `tests/store.test.mjs`.
 - **Criterios de aceptación:** una promo vencida deja de mostrarse sola; un combo roto no se muestra al público; el ahorro mostrado coincide con el cálculo de la fase 1.
 
 ### Fase 6. Carrito y pedido por WhatsApp. **Opus 5.5 (lógica) y Sonnet 5.5 (interfaz)**
 
 - **Objetivo:** que la clienta arme un pedido y lo envíe por WhatsApp.
 - **Alcance:**
-  1. Opus: módulo del carrito en `lib/` (agregar, cambiar cantidad, quitar, reconciliar contra el catálogo actual, total con líneas a confirmar) y generador del mensaje (sección 5), puros y con tests, incluidos los casos: producto ocultado, precio cambiado, combo roto, mensaje demasiado largo, caracteres especiales.
-  2. Sonnet: botón **Agregar** en tarjetas y fichas; ícono de carrito con contador en el encabezado; panel o página del carrito con cantidades, quitar, datos del pedido (nombre, retiro o envío, dirección, nota) y botón **Pedir por WhatsApp**.
+  1. ~~Opus: módulo del carrito y generador del mensaje, puros y con tests.~~ **Hecho** en `lib/cart.ts`. Ver "Guía para Sonnet: fase 6" abajo.
+  2. Sonnet: botón **Agregar** en tarjetas, fichas y combos; ícono de carrito con contador en el encabezado; panel o página del carrito con cantidades, quitar, datos del pedido (nombre, retiro o envío, dirección, nota) y botón **Pedir por WhatsApp**.
   3. Persistencia en `localStorage` con manejo seguro de errores (ver las reglas de la sección 5).
+
+**Guía para Sonnet: fase 6 (todo listo en `lib/cart.ts`, solo falta interfaz)**
+
+- **Datos:** la página del servidor pasa `shop.offers` (lista de `Offer`: `key`, `name`, `unit`, `price`) al componente cliente del carrito. Es seguro mandarlo al navegador: no tiene datos internos. La clave de un producto es `ShopItem.key` (`p:<id>`), la de un combo `ShopCombo.key` (`c:<id>`).
+- **Guardar y leer:** `parseCart(localStorage.getItem(CART_STORAGE_KEY))` y `localStorage.setItem(CART_STORAGE_KEY, serializeCart(cart))`. Envolver **cada** acceso a `localStorage` en `try/catch` (navegación privada, almacenamiento bloqueado): si falla, el carrito funciona en memoria. Leer en un `useEffect` para no romper la hidratación.
+- **Operar:** `addToCart`, `setQty` (0 quita), `removeFromCart`, `cartCount` para el contador. Antes de agregar una línea nueva, `canAdd(cart, key)`: si es `false`, avisar "El carrito llegó al máximo de 50 productos distintos".
+- **Mostrar:** `resolveCart(cart, offers)` da `lines` (con `name`, `unit`, `unitPrice`, `subtotal`, sin precio si es "Consultar"), `total`, `pending` (líneas a confirmar) y `removed`. Si `removed.length > 0`, guardar `resolved.cart` y avisar "Quitamos del carrito N productos que ya no están disponibles". Si `pending > 0`, decir que esos precios se confirman por WhatsApp.
+- **Pedir:** `validateOrder(details)` devuelve los errores por campo (mostrarlos debajo de cada campo). Con el formulario válido: `orderMessage(resolveCart(cart, offers), details)` y `orderUrl(store.whatsapp, message)`. Si `tooLong`, advertir que el pedido es muy largo y sugerir dividirlo, pero dejar abrir igual. Si la tienda no tiene WhatsApp (`!store.whatsapp`), no ofrecer el botón y explicar que se puede consultar por las redes o en el local.
+- **No hacer:** calcular precios o totales en la interfaz, ni guardar precios en el navegador, ni armar el texto del mensaje a mano. Todo eso está en `lib/cart.ts` y tiene tests.
+- Después de abrir WhatsApp, **no** vaciar el carrito automáticamente (la persona puede volver sin enviar); ofrecer "Vaciar carrito".
+- Tests de referencia: `tests/store.test.mjs`.
 - **Criterios de aceptación:** el mensaje coincide con el ejemplo de la sección 5; los precios del mensaje siempre salen del catálogo actual, nunca de lo guardado en el navegador; sin número de WhatsApp en la tienda no se ofrece el botón y se explica.
 
 ### Fase 7. Revisión final. **Opus 5.5**
 
 - **Objetivo:** cerrar riesgos antes de publicar.
-- **Revisar:** que nada oculto ni interno (notas, borradores, preparación del tónico) salga por el API público ni por las páginas de tienda (hoy el API público ya incluye `notes` de las fichas publicadas: decidir si se limpia); que los precios se recalculen en el servidor y en el cliente con la misma función; accesibilidad (foco, contraste, tamaños táctiles de 44 px); que el mensaje de pedido no permita inyectar texto confuso; comportamiento sin conexión del service worker con la tienda.
 - **Entrega:** lista de hallazgos corregidos y pendientes en el registro.
+
+**Prerrevisión hecha (Opus 5.5, 2026-10-26)**, sobre lo que existía antes de las fases 2 a 6:
+
+- Correcto: las páginas de la tienda no mandan al navegador datos internos (`app/catalogo/page.tsx` mapea a `Product` sin `item`; la ficha usa `item` solo en el servidor). Las `offers` del carrito tampoco (test en `tests/store.test.mjs`).
+- Correcto: el mensaje de pedido no permite agregar líneas falsas (saltos de línea y caracteres de control del cliente se aplanan; test con prueba de mutación).
+- Correcto: el precio se calcula en un solo lugar (`effectivePrice`), en el servidor; el navegador recibe precios ya resueltos y el carrito nunca guarda precios.
+- **Pendiente, decisión de la dueña: el API público expone notas internas y recetas.** La vista del vendedor muestra "Notas internas" (`app/finder.tsx`) y entra sin contraseña, así que `GET /api/catalog?scope=public` devuelve a cualquiera las `notes` y las `instructions` (preparación del tónico). Antes era un riesgo menor (la web solo la usaba el equipo); con la tienda pública, el dominio va a circular. Opciones: (a) aceptar y documentar; (b) dar al vendedor un acceso con código simple y sacar `notes` e `instructions` del API sin sesión; (c) sacar solo `instructions`. No se cambió nada: requiere decidir cómo entra el vendedor.
+
+**Lista de chequeo para la revisión final**, a correr cuando terminen las fases 2 a 6 (puede hacerla Sonnet si no se vuelve a Opus):
+
+1. Ninguna página de `app/catalogo/` pasa `ShopItem.item`, `shop.catalog` ni objetos `Plant`/`Preparation`/`Catalog` a un componente `"use client"` (buscar los props de cada componente cliente).
+2. Ningún componente calcula precios, totales o ahorros por su cuenta: todo sale de `lib/shop.ts` y `lib/cart.ts` (buscar `* qty`, `price *`, `reduce(` en `app/`).
+3. Un producto oculto, un borrador y un producto de una categoría oculta: no aparecen en `/catalogo`, su ficha da 404, no se pueden agregar, y un carrito viejo que los tenía los quita con aviso.
+4. Un combo con un producto oculto no aparece, su ficha da 404 y se avisa en el administrador.
+5. Sin WhatsApp cargado no se ofrece "Pedir por WhatsApp" ni "Consultar"; con WhatsApp, el link abre el número correcto.
+6. Datos de la tienda: los links de Instagram, Facebook y mapa abren con `rel="noopener noreferrer"`; un usuario `@nekurel` se convierte en link correcto.
+7. Accesibilidad: todo control de 44 px o más, foco visible, contador del carrito anunciado (`aria-live`), errores del formulario asociados a su campo, contraste del precio tachado.
+8. Sin conexión: el service worker guarda las páginas de la tienda (`navigate`, network first). Un pedido armado sin conexión usa los precios de la última página vista; verificar que la página muestre "Precios al <fecha>" y subir `VERSION` en `public/sw.js`.
+9. Edición masiva de precios: un conflicto de versión no pierde lo editado.
+10. Correr los tres archivos de tests, `tsc` y `eslint`.
 
 ### Fase 8. Tests, README y commit. **Haiku 5.5**
 
@@ -217,9 +257,9 @@ Actualizar esta tabla al terminar cada fase.
 | 2. Pestaña Tienda: datos de contacto | Sonnet 5.5 | Pendiente |
 | 3. Edición masiva de precios | Sonnet 5.5 | Pendiente |
 | 4. Ocultar productos y categorías | Sonnet 5.5 | Pendiente |
-| 5. Promociones y combos | Opus 5.5 y Sonnet 5.5 | Pendiente |
-| 6. Carrito y pedido por WhatsApp | Opus 5.5 y Sonnet 5.5 | Pendiente |
-| 7. Revisión final | Opus 5.5 | Pendiente |
+| 5. Promociones y combos | Opus 5.5 y Sonnet 5.5 | Parte de Opus hecha; falta interfaz (Sonnet) |
+| 6. Carrito y pedido por WhatsApp | Opus 5.5 y Sonnet 5.5 | Parte de Opus hecha; falta interfaz (Sonnet) |
+| 7. Revisión final | Opus 5.5 | Prerrevisión hecha; falta correr la lista de chequeo al final (Sonnet o Opus) |
 | 8. Tests, README y commit | Haiku 5.5 | Pendiente |
 
 ## 8. Registro de decisiones y notas entre fases
@@ -239,3 +279,11 @@ Actualizar esta tabla al terminar cada fase.
   - **Slugs estables:** se asignan sobre todos los productos publicados, no solo los visibles, para que ocultar uno no cambie el link de otro.
   - **CSV:** reimportar tónicos conserva `hidden`, `promoPrice` y `promoUntil`, que no viajan en el CSV.
   - Tests: 11 nuevos en `tests/catalog.test.mjs` (sección "Online store").
+- 2026-10-26, partes de Opus de las fases 5, 6 y 7 (Opus 5.5), adelantadas para que Sonnet haga todo lo demás de corrido:
+  - `lib/shop.ts`: `buildShop(catalog, today)` (puro, testeable) y `loadShop()`. Agrega `combos`, `offers` y `store`, y resuelve los precios con `effectivePrice`. `ShopItem.price` ahora es el precio que se cobra (el de oferta si hay promo).
+  - `lib/catalog.ts`: `formatMoney`, `comboSlug`, y el slug `combos` reservado (un producto llamado "Combos" toma `combos-producto`).
+  - **Decisión: ruta de combos `/catalogo/combos/[slug]`.**
+  - **Decisión: el carrito resuelve contra `offers`, no contra el catálogo.** El navegador nunca recibe el catálogo entero (tiene notas y recetas); recibe solo nombre, unidad y precio vigente de lo que se puede comprar.
+  - `lib/cart.ts`: carrito, validación del pedido, mensaje y link de WhatsApp. Límites: 99 por línea, 50 líneas, aviso si el link supera 4000 caracteres. Lo que escribe el cliente se aplana a una línea para que no pueda agregar renglones falsos al pedido.
+  - Tests: 13 nuevos en `tests/store.test.mjs`.
+  - Prerrevisión de la fase 7 y lista de chequeo final: ver la fase 7. **Queda una decisión para la dueña: el API público expone notas internas y recetas.**

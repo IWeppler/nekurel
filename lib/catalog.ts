@@ -49,9 +49,11 @@ export const categoryOptions = [
 /** "$ 1.500 / 100 g", or "" when the item has no price. */
 export function formatPrice(item: { price?: number; priceUnit?: string }): string {
   if (typeof item.price !== "number") return "";
-  const amount = item.price.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: item.price % 1 ? 2 : 0 });
+  const amount = formatMoney(item.price);
   return item.priceUnit?.trim() ? `${amount} / ${item.priceUnit.trim()}` : amount;
 }
+/** "$ 1.500" or "$ 1.500,50": cents only when there are any. */
+export const formatMoney = (value: number) => value.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: value % 1 ? 2 : 0 });
 /** Today's date as "YYYY-MM-DD" in Argentina, the store's time zone. */
 export const storeToday = (now = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 export type EffectivePrice = { price?: number; regular?: number; onPromo: boolean; unit: string };
@@ -121,14 +123,19 @@ export type AvoidId = (typeof avoidOptions)[number]["id"];
 export const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 /** URL-safe version of a name: "Té de Menta" becomes "te-de-menta". */
 export const slugify = (value: string) => normalize(value).replace(/ /g, "-") || "producto";
+const reservedSlugs = new Set(["combos"]);
+/** Combo names are unique once normalized (see validateCatalog), so their slugs never collide. */
+export const comboSlug = (combo: { name: string }) => slugify(combo.name);
 /**
  * One slug per item, taken from its name. Items that share a name get the kind appended
  * ("menta-hierba", "menta-tonico"), and an id fragment if that still collides.
  */
 export function assignSlugs(items: { id: string; name: string; tonic: boolean }[]): Map<string, string> {
+  // "combos" is a route of its own (/catalogo/combos/...), so a product cannot take it.
+  const own = (name: string) => reservedSlugs.has(slugify(name)) ? `${slugify(name)}-producto` : slugify(name);
   const base = new Map<string, number>();
-  for (const item of items) base.set(slugify(item.name), (base.get(slugify(item.name)) ?? 0) + 1);
-  const kinded = items.map(item => ({ item, slug: base.get(slugify(item.name))! > 1 ? `${slugify(item.name)}-${item.tonic ? "tonico" : "hierba"}` : slugify(item.name) }));
+  for (const item of items) base.set(own(item.name), (base.get(own(item.name)) ?? 0) + 1);
+  const kinded = items.map(item => ({ item, slug: base.get(own(item.name))! > 1 ? `${own(item.name)}-${item.tonic ? "tonico" : "hierba"}` : own(item.name) }));
   const seen = new Map<string, number>();
   for (const { slug } of kinded) seen.set(slug, (seen.get(slug) ?? 0) + 1);
   return new Map(kinded.map(({ item, slug }) => [item.id, seen.get(slug)! > 1 ? `${slug}-${item.id.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 6)}` : slug]));
